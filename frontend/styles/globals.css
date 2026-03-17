@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-rsk-bg text-rsk-text antialiased;
+    background-image: theme('backgroundImage.rsk-radial');
+    background-repeat: no-repeat;
+  }
+
+  ::selection {
+    background: rgba(255, 106, 0, 0.35);
+  }
+}
+
+@layer components {
+  .rsk-container {
+    @apply mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .rsk-card {
+    @apply rounded-xl border border-rsk-border bg-rsk-card shadow-card;
+  }
+
+  .rsk-gradient-border {
+    background: linear-gradient(#141414, #141414) padding-box,
+      linear-gradient(135deg, rgba(255, 106, 0, 0.9), rgba(255, 140, 66, 0.4)) border-box;
+    border: 1px solid transparent;
+    border-radius: 16px;
+  }
+}

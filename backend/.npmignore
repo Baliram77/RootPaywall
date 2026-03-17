@@ -1,0 +1,12 @@
+src/
+tests/
+*.test.ts
+*.spec.ts
+jest.config.js
+tsconfig.json
+.x402/
+.x402-test/
+coverage/
+*.log
+.env
+.env.*
