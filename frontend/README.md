@@ -95,6 +95,8 @@ frontend/
     index.tsx       # Dashboard
     public.tsx      # Free article
     premium.tsx     # 402 paywall + unlock flow
+  public/
+    rootstock-logo.png  # Rootstock logo used in the navbar
   components/
     WalletConnect.tsx
     UnlockStatus.tsx

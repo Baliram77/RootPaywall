@@ -38,7 +38,7 @@ Open **two terminals**.
 ### 1) Start the demo backend
 
 ```bash
-cd /home/hp/RootPaywall/demo-backend
+cd demo-backend
 cp .env.example .env
 ```
 
@@ -47,9 +47,12 @@ Edit `demo-backend/.env` and set:
 - `MERCHANT_ADDRESS` to your Rootstock Testnet wallet address (0x…)
 - `JWT_SECRET` to any long random string (for demo, any string works)
 
+The backend will **fail fast** on startup if `MERCHANT_ADDRESS` is missing or still the placeholder.
+
 Then run:
 
 ```bash
+cd demo-backend
 npm install
 npm run dev
 ```
@@ -59,7 +62,7 @@ Backend runs at `http://localhost:3000`.
 ### 2) Start the frontend
 
 ```bash
-cd /home/hp/RootPaywall/frontend
+cd frontend
 cp .env.example .env.local
 npm install
 npm run dev
@@ -72,6 +75,10 @@ PORT=3001 npm run dev
 ```
 
 Open the URL printed by Next.js (e.g. `http://localhost:3000` or `http://localhost:3001`).
+
+## Branding
+
+- The Rootstock logo used in the navbar is served from `frontend/public/rootstock-logo.png`.
 
 ## Repo structure
 

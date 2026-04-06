@@ -34,6 +34,8 @@ Then set:
 | `JWT_SECRET` | yes | Secret used to sign access tokens |
 | `PORT` | no | Server port (default: `3000`) |
 
+If `MERCHANT_ADDRESS` is missing or still the placeholder, the server will exit on startup with an error.
+
 If you see network timeouts with the default RPC, try:
 
 - `ROOTSTOCK_RPC_URL=https://rootstock-testnet.drpc.org`
