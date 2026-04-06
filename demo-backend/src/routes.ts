@@ -30,7 +30,7 @@ function logUnlock(userAddress: string, resourceId: string): void {
 export function registerRoutes(app: IRouter): void {
   initializeX402({
     rpcUrl: config.rootstockRpcUrl,
-    recipientAddress: config.merchantAddress || '0x0000000000000000000000000000000000000000',
+    recipientAddress: config.merchantAddress,
     requiredAmount: config.premiumPrice,
     minConfirmations: 1, // 1 = accept as soon as tx is mined (demo-friendly; use 2+ in production)
     jwtSecret: config.jwtSecret,

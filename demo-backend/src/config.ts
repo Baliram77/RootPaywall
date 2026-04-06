@@ -38,7 +38,7 @@ export const config = {
 } as const;
 
 if (!config.merchantAddress) {
-  console.warn(
-    'MERCHANT_ADDRESS not set or still the placeholder. Set it in .env to your Rootstock address to receive payments. Using zero address for demo.'
+  throw new Error(
+    'MERCHANT_ADDRESS not set (or still the placeholder). Set it in demo-backend/.env to your Rootstock address to receive payments.'
   );
 }

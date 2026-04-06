@@ -23,6 +23,7 @@ export default function PaymentModal({ paymentRequired, resourceId, onUnlock, on
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const toast = useToast();
+  const isZeroAddress = paymentRequired.address?.toLowerCase?.() === '0x0000000000000000000000000000000000000000';
 
   const handlePayAndUnlock = async () => {
     setError(null);
@@ -88,6 +89,11 @@ export default function PaymentModal({ paymentRequired, resourceId, onUnlock, on
                 {paymentRequired.address}
               </code>
             </div>
+            {isZeroAddress && (
+              <div className="rounded-xl border border-rsk-error/30 bg-rsk-error/10 px-4 py-3 text-sm text-rsk-error">
+                Backend is not configured with a real <code>MERCHANT_ADDRESS</code>. Set it in <code>demo-backend/.env</code> and restart the backend.
+              </div>
+            )}
 
             {txHash && (
               <div>
@@ -111,7 +117,7 @@ export default function PaymentModal({ paymentRequired, resourceId, onUnlock, on
             Close
           </Button>
           {step === 'confirm' && (
-            <Button variant="primary" onClick={handlePayAndUnlock}>
+            <Button variant="primary" onClick={handlePayAndUnlock} disabled={isZeroAddress}>
               Unlock with tRBTC
             </Button>
           )}

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { cn } from '@/components/ui/cn';
 
@@ -17,7 +18,16 @@ export default function Navbar() {
       <div className="rsk-container">
         <div className="flex h-16 items-center justify-between gap-6">
           <Link href="/" className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-rsk-gradient shadow-glow" />
+            <div className="relative h-9 w-9 overflow-hidden rounded-xl border border-rsk-border bg-black/20 shadow-glow">
+              <Image
+                src="/rootstock-logo.png"
+                alt="Rootstock"
+                fill
+                sizes="36px"
+                className="object-contain p-1.5"
+                priority
+              />
+            </div>
             <div className="leading-tight">
               <div className="text-sm font-semibold text-rsk-text">x402 Unlocker</div>
               <div className="text-[11px] text-rsk-muted">powered by Rootstock</div>
