@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { parseEther, verifyMessage } from 'ethers';
 import { sendPayment } from '@/lib/blockchain';
 import type { PaymentRequired402 } from '@/lib/api';
@@ -15,10 +15,19 @@ interface PaymentModalProps {
   paymentRequired: PaymentRequired402;
   resourceId: string;
   onUnlock: (txHash: string) => Promise<void>;
+  initialTxHash?: string | null;
+  onTxHashChange?: (txHash: string | null) => void;
   onClose: () => void;
 }
 
-export default function PaymentModal({ paymentRequired, resourceId, onUnlock, onClose }: PaymentModalProps) {
+export default function PaymentModal({
+  paymentRequired,
+  resourceId,
+  onUnlock,
+  initialTxHash,
+  onTxHashChange,
+  onClose,
+}: PaymentModalProps) {
   const [step, setStep] = useState<'confirm' | 'sending' | 'unlocking' | 'done' | 'error'>('confirm');
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -27,6 +36,17 @@ export default function PaymentModal({ paymentRequired, resourceId, onUnlock, on
   const isZeroAddress = paymentRequired.address?.toLowerCase?.() === '0x0000000000000000000000000000000000000000';
 
   const isProcessing = step === 'sending' || step === 'unlocking';
+
+  useEffect(() => {
+    if (initialTxHash && !txHash) {
+      setTxHash(initialTxHash);
+    }
+  }, [initialTxHash, txHash]);
+
+  const setTxHashAndPersist = (hash: string | null) => {
+    setTxHash(hash);
+    onTxHashChange?.(hash);
+  };
 
   const assertSignedPaymentDetails = () => {
     const expectedSigner = (process.env.NEXT_PUBLIC_MERCHANT_SIG_SIGNER || '').trim().toLowerCase();
@@ -73,7 +93,7 @@ export default function PaymentModal({ paymentRequired, resourceId, onUnlock, on
         throw new Error('Invalid price format');
       }
       const hash = await sendPayment(paymentRequired.address, valueWei);
-      setTxHash(hash);
+      setTxHashAndPersist(hash);
       toast.push({ tone: 'info', title: 'Transaction submitted', message: 'Waiting for confirmation…' });
       setStep('unlocking');
       const timeoutMs = 60_000;
@@ -87,6 +107,27 @@ export default function PaymentModal({ paymentRequired, resourceId, onUnlock, on
       const msg = err instanceof Error ? err.message : 'Payment or unlock failed';
       if (msg.toLowerCase().includes('timeout')) setTimedOut(true);
       toast.push({ tone: 'error', title: 'Unlock failed', message: msg });
+      setError(msg);
+      setStep('error');
+    }
+  };
+
+  const handleVerifyOnly = async () => {
+    if (!txHash) return;
+    setError(null);
+    setTimedOut(false);
+    setStep('unlocking');
+    try {
+      const timeoutMs = 60_000;
+      await Promise.race([
+        onUnlock(txHash),
+        new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Verification timeout')), timeoutMs)),
+      ]);
+      toast.push({ tone: 'success', title: 'Unlocked', message: 'Premium access token saved.' });
+      setStep('done');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unlock failed';
+      if (String(msg).toLowerCase().includes('timeout')) setTimedOut(true);
       setError(msg);
       setStep('error');
     }
@@ -165,33 +206,29 @@ export default function PaymentModal({ paymentRequired, resourceId, onUnlock, on
             Close
           </Button>
           {step === 'confirm' && (
-            <Button
-              variant="primary"
-              onClick={handlePayAndUnlock}
-              disabled={isZeroAddress}
-              aria-label="Unlock content"
-            >
-              Unlock with tRBTC
-            </Button>
+            <div className="flex gap-3">
+              {txHash && (
+                <Button variant="secondary" onClick={handleVerifyOnly} aria-label="Retry verification">
+                  Verify unlock
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                onClick={handlePayAndUnlock}
+                disabled={isZeroAddress}
+                aria-label="Unlock content"
+              >
+                {txHash ? 'Pay again (new tx)' : 'Unlock with tRBTC'}
+              </Button>
+            </div>
           )}
           {step === 'error' && (
             <div className="flex gap-3">
-              {timedOut && txHash && (
+              {txHash && (
                 <Button
                   variant="secondary"
                   onClick={async () => {
-                    setError(null);
-                    setTimedOut(false);
-                    setStep('unlocking');
-                    try {
-                      await onUnlock(txHash);
-                      toast.push({ tone: 'success', title: 'Unlocked', message: 'Premium access token saved.' });
-                      setStep('done');
-                    } catch (e) {
-                      const m = e instanceof Error ? e.message : 'Unlock failed';
-                      setError(m);
-                      setStep('error');
-                    }
+                    await handleVerifyOnly();
                   }}
                   aria-label="Retry verification"
                 >

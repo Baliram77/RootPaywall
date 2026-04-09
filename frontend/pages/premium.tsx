@@ -10,6 +10,7 @@ import Button from '@/components/ui/Button';
 import { GradientCard } from '@/components/ui/Card';
 
 const TOKEN_KEY = 'x402_premium_token';
+const LAST_TX_KEY = 'x402_last_tx';
 const RESOURCE_ID = 'premium-article';
 
 function getStoredToken(): string | null {
@@ -23,12 +24,24 @@ function setStoredToken(token: string): void {
   sessionStorage.setItem(TOKEN_KEY, token);
 }
 
+function getStoredLastTx(): string | null {
+  if (typeof window === 'undefined') return null;
+  return sessionStorage.getItem(LAST_TX_KEY);
+}
+
+function setStoredLastTx(txHash: string | null): void {
+  if (typeof window === 'undefined') return;
+  if (!txHash) sessionStorage.removeItem(LAST_TX_KEY);
+  else sessionStorage.setItem(LAST_TX_KEY, txHash);
+}
+
 export default function PremiumPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'locked' | 'unlocked' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [data, setData] = useState<{ title: string; content: string; publishedAt?: string } | null>(null);
   const [paymentRequired, setPaymentRequired] = useState<PaymentRequired402 | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [lastTxHash, setLastTxHash] = useState<string | null>(null);
 
   const loadPremium = useCallback(async (token: string | null) => {
     setStatus('loading');
@@ -54,9 +67,15 @@ export default function PremiumPage() {
     loadPremium(getStoredToken());
   }, [loadPremium]);
 
+  useEffect(() => {
+    setLastTxHash(getStoredLastTx());
+  }, []);
+
   const handleUnlock = async (txHash: string) => {
     const { token } = await unlockWithTxHash(txHash, paymentRequired?.resourceId || RESOURCE_ID);
     setStoredToken(token);
+    setStoredLastTx(null);
+    setLastTxHash(null);
     await loadPremium(token);
   };
 
@@ -96,6 +115,11 @@ export default function PremiumPage() {
           paymentRequired={paymentRequired}
           resourceId={paymentRequired.resourceId || RESOURCE_ID}
           onUnlock={handleUnlock}
+          initialTxHash={lastTxHash}
+          onTxHashChange={(tx) => {
+            setStoredLastTx(tx);
+            setLastTxHash(tx);
+          }}
           onClose={() => setShowModal(false)}
         />
       )}
