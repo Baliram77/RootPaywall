@@ -17,7 +17,7 @@ describe('PaymentVerifier', () => {
       minConfirmations: 1,
       isTxHashUsed: mockIsTxHashUsed,
     });
-    const result = await verifier.verifyPayment('0xabc');
+    const result = await verifier.verifyPayment('0x' + 'a'.repeat(64));
     expect(result.valid).toBe(false);
     expect(result.error).toContain('already used');
   });

@@ -26,11 +26,21 @@ function x402Middleware(options) {
     const price = typeof options.price === 'number' ? String(options.price) : options.price;
     const recipientAddress = options.recipientAddress;
     const accessDurationSeconds = options.accessDurationSeconds;
+    const enforceHttps = options.enforceHttps ??
+        (process.env.NODE_ENV === 'production' || process.env.X402_ENFORCE_HTTPS === 'true');
     return function middleware(req, res, next) {
         const service = getUnlockService();
         if (!service) {
             res.status(500).json({ error: 'x402 not initialized. Call initializeX402() first.' });
             return;
+        }
+        if (enforceHttps) {
+            const xfProto = req.headers['x-forwarded-proto'] ?? '';
+            const isHttps = req.secure || xfProto.toLowerCase().includes('https');
+            if (!isHttps) {
+                res.status(400).json({ error: 'HTTPS is required' });
+                return;
+            }
         }
         const config = service.getResourceConfig(resourceId);
         service.registerResource({
@@ -53,11 +63,20 @@ function x402Middleware(options) {
             ? authHeader.slice(7)
             : req.query?.token ?? req.body?.token;
         if (!token) {
+            const sig = service.createPaymentRequiredSignature({
+                address,
+                price: displayPrice,
+                resourceId,
+            });
             const body = {
                 error: 'Payment Required',
                 price: displayPrice,
                 address,
                 resourceId,
+                chainId: service.getChainId(),
+                addressSig: sig?.sig,
+                addressSigExpiresAt: sig?.expiresAt,
+                addressSigSigner: sig?.signer,
             };
             res.status(PAYMENT_REQUIRED_STATUS).json(body);
             return;
@@ -65,21 +84,39 @@ function x402Middleware(options) {
         const access = service.getAccessController();
         const payload = access.validateAccessToken(token);
         if (!payload) {
+            const sig = service.createPaymentRequiredSignature({
+                address,
+                price: displayPrice,
+                resourceId,
+            });
             const body = {
                 error: 'Payment Required',
                 price: displayPrice,
                 address,
                 resourceId,
+                chainId: service.getChainId(),
+                addressSig: sig?.sig,
+                addressSigExpiresAt: sig?.expiresAt,
+                addressSigSigner: sig?.signer,
             };
             res.status(PAYMENT_REQUIRED_STATUS).json(body);
             return;
         }
         if (payload.resourceId !== resourceId) {
+            const sig = service.createPaymentRequiredSignature({
+                address,
+                price: displayPrice,
+                resourceId,
+            });
             const body = {
                 error: 'Payment Required',
                 price: displayPrice,
                 address,
                 resourceId,
+                chainId: service.getChainId(),
+                addressSig: sig?.sig,
+                addressSigExpiresAt: sig?.expiresAt,
+                addressSigSigner: sig?.signer,
             };
             res.status(PAYMENT_REQUIRED_STATUS).json(body);
             return;
@@ -109,13 +146,21 @@ function createUnlockRoute(rateLimitKey) {
                 res.status(400).json({ error: 'Missing txHash or resourceId' });
                 return;
             }
+            if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+                res.status(400).json({ error: 'Invalid txHash format' });
+                return;
+            }
+            if (!/^[a-zA-Z0-9._:-]{1,128}$/.test(resourceId)) {
+                res.status(400).json({ error: 'Invalid resourceId format' });
+                return;
+            }
             const key = rateLimitKey ? rateLimitKey(req) : req.ip ?? req.socket?.remoteAddress ?? 'unknown';
             const result = await service.verifyAndUnlock(txHash, resourceId, key);
             if (result.success) {
                 res.json({ token: result.token, expiresIn: result.expiresIn });
             }
             else {
-                res.status(400).json({ error: result.error });
+                res.status(400).json({ error: result.error, code: result.code });
             }
         };
         run().catch(next);

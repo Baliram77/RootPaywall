@@ -27,6 +27,9 @@ export interface InitializeX402Options {
     storagePath?: string;
     rateLimitMax?: number;
     rateLimitWindowMs?: number;
+    /** Optional: sign 402 payment details to prevent MITM swapping. */
+    merchantSigPrivateKey?: string;
+    merchantSigTtlSeconds?: number;
 }
 /**
  * Initialize the x402 SDK. Call this once before using x402Middleware or createUnlockRoute.

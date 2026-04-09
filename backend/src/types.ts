@@ -23,6 +23,13 @@ export interface X402Config {
   chainId?: number;
   /** Optional: custom storage path for usage logs and used tx hashes */
   storagePath?: string;
+  /**
+   * Optional: private key used to sign 402 payment details (prevents MITM address swapping).
+   * If set, middleware will include signature fields in the 402 response.
+   */
+  merchantSigPrivateKey?: string;
+  /** Signature TTL in seconds (default 300). */
+  merchantSigTtlSeconds?: number;
 }
 
 /** Payment verification result */
@@ -34,6 +41,7 @@ export interface PaymentVerificationResult {
   confirmations?: number;
   txHash?: string;
   error?: string;
+  errorCode?: string;
 }
 
 /** JWT access token payload */
@@ -59,6 +67,11 @@ export interface X402MiddlewareOptions {
   price: string;
   recipientAddress?: string;
   accessDurationSeconds?: number;
+  /**
+   * Enforce HTTPS (recommended for production).
+   * Default: true in production, false otherwise.
+   */
+  enforceHttps?: boolean;
 }
 
 /** HTTP 402 response body */
@@ -67,6 +80,10 @@ export interface PaymentRequiredResponse {
   price: string;
   address: string;
   resourceId?: string;
+  chainId?: number;
+  addressSig?: string;
+  addressSigExpiresAt?: number; // unix seconds
+  addressSigSigner?: string; // signer address
 }
 
 /** Rootstock chain IDs */

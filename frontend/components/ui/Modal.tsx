@@ -9,12 +9,14 @@ export default function Modal({
   description,
   onClose,
   children,
+  closeOnBackdrop = true,
 }: {
   open: boolean;
   title?: string;
   description?: string;
   onClose: () => void;
   children: ReactNode;
+  closeOnBackdrop?: boolean;
 }) {
   if (!open) return null;
 
@@ -22,7 +24,7 @@ export default function Modal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={closeOnBackdrop ? onClose : undefined}
         aria-hidden="true"
       />
       <div className={cn('relative w-full max-w-lg animate-scale-in')}>

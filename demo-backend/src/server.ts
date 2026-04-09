@@ -9,7 +9,9 @@ app.use(cors({ origin: true }));
 app.use(express.json());
 
 app.use((req, _res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  if (process.env.DEBUG) {
+    console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  }
   next();
 });
 

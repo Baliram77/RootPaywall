@@ -40,6 +40,9 @@ export interface InitializeX402Options {
   storagePath?: string;
   rateLimitMax?: number;
   rateLimitWindowMs?: number;
+  /** Optional: sign 402 payment details to prevent MITM swapping. */
+  merchantSigPrivateKey?: string;
+  merchantSigTtlSeconds?: number;
 }
 
 /**
@@ -51,12 +54,14 @@ export function initializeX402(options: InitializeX402Options): UnlockService {
     rpcUrl: options.rpcUrl ?? DEFAULT_ROOTSTOCK_TESTNET_RPC,
     recipientAddress: options.recipientAddress,
     requiredAmount: options.requiredAmount,
-    minConfirmations: options.minConfirmations ?? 3,
+    minConfirmations: options.minConfirmations ?? 6,
     jwtSecret: options.jwtSecret,
     chainId: options.chainId ?? 31,
     storagePath: options.storagePath,
     rateLimitMax: options.rateLimitMax,
     rateLimitWindowMs: options.rateLimitWindowMs,
+    merchantSigPrivateKey: options.merchantSigPrivateKey,
+    merchantSigTtlSeconds: options.merchantSigTtlSeconds,
   });
   setUnlockService(service);
   return service;

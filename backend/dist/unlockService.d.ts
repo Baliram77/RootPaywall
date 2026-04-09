@@ -18,6 +18,7 @@ export interface UnlockResult {
 export interface UnlockError {
     success: false;
     error: string;
+    code?: string;
 }
 export type UnlockResponse = UnlockResult | UnlockError;
 export declare class UnlockService {
@@ -29,7 +30,19 @@ export declare class UnlockService {
     private access;
     private logger;
     private rateLimit;
+    private resourceConfigs;
+    private merchantSigWallet;
+    private merchantSigTtlSeconds;
     constructor(options: UnlockServiceOptions);
+    createPaymentRequiredSignature(params: {
+        address: string;
+        price: string;
+        resourceId: string;
+    }): {
+        sig: string;
+        expiresAt: number;
+        signer: string;
+    } | null;
     /** Register or override resource config (for dynamic pricing). */
     registerResource(config: ResourceConfig): void;
     /** Get resource config; returns default pricing if not registered. */
@@ -41,5 +54,6 @@ export declare class UnlockService {
     verifyAndUnlock(txHash: string, resourceId: string, rateLimitKey?: string): Promise<UnlockResponse>;
     getAccessController(): AccessController;
     getUsageLogger(): UsageLogger;
+    getChainId(): number;
 }
 //# sourceMappingURL=unlockService.d.ts.map

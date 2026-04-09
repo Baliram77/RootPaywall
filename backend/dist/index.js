@@ -40,12 +40,14 @@ function initializeX402(options) {
         rpcUrl: options.rpcUrl ?? types_1.DEFAULT_ROOTSTOCK_TESTNET_RPC,
         recipientAddress: options.recipientAddress,
         requiredAmount: options.requiredAmount,
-        minConfirmations: options.minConfirmations ?? 3,
+        minConfirmations: options.minConfirmations ?? 6,
         jwtSecret: options.jwtSecret,
         chainId: options.chainId ?? 31,
         storagePath: options.storagePath,
         rateLimitMax: options.rateLimitMax,
         rateLimitWindowMs: options.rateLimitWindowMs,
+        merchantSigPrivateKey: options.merchantSigPrivateKey,
+        merchantSigTtlSeconds: options.merchantSigTtlSeconds,
     });
     (0, x402Middleware_1.setUnlockService)(service);
     return service;

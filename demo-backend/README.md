@@ -114,4 +114,5 @@ curl http://localhost:3000/premium/article \
 
 - Use a strong `JWT_SECRET`
 - Use a reliable RPC provider (or run your own node)
-- Increase `minConfirmations` in code for production (2+)
+- Use `MIN_CONFIRMATIONS=6` (or higher) in production
+- Consider setting `MERCHANT_SIG_PRIVATE_KEY` and configuring the frontend with `NEXT_PUBLIC_MERCHANT_SIG_SIGNER` to prevent MITM address swapping

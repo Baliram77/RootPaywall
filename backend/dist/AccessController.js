@@ -8,12 +8,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AccessController = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-/** In-memory revocation set: token jti or "address:resourceId" */
-const revokedSet = new Set();
+const RevocationStore_1 = require("./RevocationStore");
 class AccessController {
     constructor(options) {
         this.secret = options.jwtSecret;
         this.defaultExpirySeconds = options.defaultExpirySeconds ?? 3600; // 1 hour
+        this.revocations = options.revocationStore ?? new RevocationStore_1.MemoryRevocationStore();
     }
     /**
      * Generate a JWT access token for a user and resource.
@@ -36,7 +36,7 @@ class AccessController {
         try {
             const decoded = jsonwebtoken_1.default.verify(token, this.secret);
             const key = `${decoded.userAddress}:${decoded.resourceId}`;
-            if (revokedSet.has(key))
+            if (this.revocations.isRevoked(key))
                 return null;
             if (decoded.expiry && decoded.expiry < Math.floor(Date.now() / 1000)) {
                 return null;
@@ -54,7 +54,7 @@ class AccessController {
         try {
             const decoded = jsonwebtoken_1.default.decode(token);
             if (decoded?.userAddress && decoded?.resourceId) {
-                revokedSet.add(`${decoded.userAddress}:${decoded.resourceId}`);
+                this.revocations.revoke(`${decoded.userAddress}:${decoded.resourceId}`, typeof decoded.expiry === 'number' ? decoded.expiry : undefined);
             }
         }
         catch {
@@ -65,7 +65,7 @@ class AccessController {
      * Revoke all access for a user on a resource.
      */
     revokeAccess(userAddress, resourceId) {
-        revokedSet.add(`${userAddress.toLowerCase()}:${resourceId}`);
+        this.revocations.revoke(`${userAddress.toLowerCase()}:${resourceId}`);
     }
 }
 exports.AccessController = AccessController;

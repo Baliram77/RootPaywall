@@ -36,12 +36,17 @@ export default function WalletConnect() {
     const onChainChanged = () => {
       getNetworkChainId().then(setChainId).catch(() => setChainId(null));
     };
-    window.ethereum?.request?.({ method: 'eth_accounts' }).then((accounts: unknown) => {
-      if (Array.isArray(accounts) && accounts.length > 0) {
-        getWalletAddress().then(setAddress).catch(() => setAddress(null));
-        getNetworkChainId().then(setChainId).catch(() => setChainId(null));
-      }
-    });
+    window.ethereum?.request?.({ method: 'eth_accounts' })
+      .then((accounts: unknown) => {
+        if (Array.isArray(accounts) && accounts.length > 0) {
+          getWalletAddress().then(setAddress).catch(() => setAddress(null));
+          getNetworkChainId().then(setChainId).catch(() => setChainId(null));
+        }
+      })
+      .catch(() => {
+        // Leave UI interactive; user can retry via connect button.
+        setAddress(null);
+      });
     window.ethereum?.on?.('accountsChanged', onAccountsChanged);
     window.ethereum?.on?.('chainChanged', onChainChanged);
     return () => {

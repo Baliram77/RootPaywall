@@ -12,7 +12,7 @@ Modern Web3 UI (Next.js + Tailwind) that unlocks premium content using Rootstock
   - user sends tRBTC payment in MetaMask
   - frontend posts `txHash` to `POST /unlock`
   - backend returns a JWT token
-  - token is stored in `localStorage` and premium request is retried automatically
+- token is stored in `sessionStorage` and premium request is retried automatically
 - **UX polish**: skeleton loaders, toasts, animated modal + status indicators
 
 ## Tech stack
@@ -43,6 +43,7 @@ Environment variables:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NEXT_PUBLIC_BACKEND_URL` | yes | Demo backend base URL (default: `http://localhost:3000`) |
+| `NEXT_PUBLIC_MERCHANT_SIG_SIGNER` | no | If set, the frontend will **require** a valid signature on the 402 response and verify it against this signer address |
 
 ## Run (local development)
 
@@ -80,7 +81,7 @@ npm run start
 ## User flow (premium unlock)
 
 1. Visit `/premium`
-2. Backend returns **402** with `{ price, address, resourceId }`
+2. Backend returns **402** with `{ price, address, resourceId, chainId, addressSig, addressSigExpiresAt, addressSigSigner }` (signature fields optional unless you enforce them via `NEXT_PUBLIC_MERCHANT_SIG_SIGNER`)
 3. Click **Unlock with tRBTC**
 4. Confirm payment in MetaMask
 5. Frontend calls `POST /unlock` with `txHash`

@@ -8,11 +8,21 @@ export interface UsageLoggerOptions {
 export declare class UsageLogger {
     private usagePath;
     private usedTxPath;
+    private claimsDir;
     constructor(options?: UsageLoggerOptions);
     /** Log a usage event (payment + resource access). */
     log(entry: UsageLogEntry): void;
     /** Record a tx hash as used to prevent double spending. */
     markTxUsed(txHash: string): void;
+    /**
+     * Atomically claim a tx hash to prevent concurrent verification (TOCTOU).
+     * Uses an exclusive lock file per tx hash, which is safe across processes.
+     *
+     * Returns true if claimed, false if already claimed/used.
+     */
+    claimTxHash(txHash: string): boolean;
+    /** Release a previously claimed tx hash (best-effort). */
+    releaseTxHash(txHash: string): void;
     /** Check if a tx hash was already used. */
     isTxUsed(txHash: string): boolean;
     /** Async version for PaymentVerifier. */

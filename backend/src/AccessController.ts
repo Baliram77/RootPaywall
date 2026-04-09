@@ -4,22 +4,24 @@
 
 import jwt from 'jsonwebtoken';
 import type { AccessTokenPayload } from './types';
+import type { RevocationStore } from './RevocationStore';
+import { MemoryRevocationStore } from './RevocationStore';
 
 export interface AccessControllerOptions {
   jwtSecret: string;
   defaultExpirySeconds?: number;
+  revocationStore?: RevocationStore;
 }
-
-/** In-memory revocation set: token jti or "address:resourceId" */
-const revokedSet = new Set<string>();
 
 export class AccessController {
   private secret: string;
   private defaultExpirySeconds: number;
+  private revocations: RevocationStore;
 
   constructor(options: AccessControllerOptions) {
     this.secret = options.jwtSecret;
     this.defaultExpirySeconds = options.defaultExpirySeconds ?? 3600; // 1 hour
+    this.revocations = options.revocationStore ?? new MemoryRevocationStore();
   }
 
   /**
@@ -48,7 +50,7 @@ export class AccessController {
     try {
       const decoded = jwt.verify(token, this.secret) as AccessTokenPayload;
       const key = `${decoded.userAddress}:${decoded.resourceId}`;
-      if (revokedSet.has(key)) return null;
+      if (this.revocations.isRevoked(key)) return null;
       if (decoded.expiry && decoded.expiry < Math.floor(Date.now() / 1000)) {
         return null;
       }
@@ -65,7 +67,10 @@ export class AccessController {
     try {
       const decoded = jwt.decode(token) as AccessTokenPayload | null;
       if (decoded?.userAddress && decoded?.resourceId) {
-        revokedSet.add(`${decoded.userAddress}:${decoded.resourceId}`);
+        this.revocations.revoke(
+          `${decoded.userAddress}:${decoded.resourceId}`,
+          typeof decoded.expiry === 'number' ? decoded.expiry : undefined
+        );
       }
     } catch {
       // ignore
@@ -76,6 +81,6 @@ export class AccessController {
    * Revoke all access for a user on a resource.
    */
   revokeAccess(userAddress: string, resourceId: string): void {
-    revokedSet.add(`${userAddress.toLowerCase()}:${resourceId}`);
+    this.revocations.revoke(`${userAddress.toLowerCase()}:${resourceId}`);
   }
 }

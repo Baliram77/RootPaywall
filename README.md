@@ -94,6 +94,7 @@ RootPaywall/
 If you want to use the paywall in your own Express API, the core pieces are:
 
 - `initializeX402({ rpcUrl, recipientAddress, requiredAmount, minConfirmations, jwtSecret })`
+- `initializeX402({ ..., minConfirmations: 6, merchantSigPrivateKey })` is recommended for production
 - `x402Middleware({ resourceId, price })` → returns **402** until unlocked
 - `createUnlockRoute()` → `POST /unlock` issues `{ token, expiresIn }`
 

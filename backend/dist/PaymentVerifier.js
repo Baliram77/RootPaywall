@@ -67,6 +67,9 @@ function hexToBigInt(hex) {
     const s = hex.startsWith('0x') ? hex.slice(2) : hex;
     return BigInt('0x' + s || '0');
 }
+function isValidTxHash(txHash) {
+    return /^0x[a-fA-F0-9]{64}$/.test(txHash);
+}
 class PaymentVerifier {
     constructor(options) {
         this.rpcUrl = options.rpcUrl.replace(/\/$/, '');
@@ -77,23 +80,27 @@ class PaymentVerifier {
     }
     async verifyPayment(txHash) {
         try {
+            if (!isValidTxHash(txHash)) {
+                return { valid: false, errorCode: 'INVALID_TX_HASH', error: 'Invalid txHash format' };
+            }
             const used = await this.isTxHashUsed(txHash);
             if (used) {
-                return { valid: false, error: 'Transaction already used' };
+                return { valid: false, errorCode: 'TX_ALREADY_USED', error: 'Transaction already used' };
             }
             const txRaw = await rpcCall(this.rpcUrl, 'eth_getTransactionByHash', [txHash]);
             if (txRaw == null || (typeof txRaw === 'object' && txRaw.blockHash == null)) {
-                return { valid: false, error: 'Transaction not found' };
+                return { valid: false, errorCode: 'TX_NOT_FOUND', error: 'Transaction not found' };
             }
             const tx = txRaw;
             const to = tx.to;
             if (!to) {
-                return { valid: false, error: 'Invalid transaction (no recipient)' };
+                return { valid: false, errorCode: 'INVALID_TX_NO_RECIPIENT', error: 'Invalid transaction (no recipient)' };
             }
             const recipient = to.toLowerCase();
             if (recipient !== this.recipientAddress) {
                 return {
                     valid: false,
+                    errorCode: 'RECIPIENT_MISMATCH',
                     error: `Recipient mismatch: expected ${this.recipientAddress}, got ${recipient}`,
                 };
             }
@@ -101,22 +108,34 @@ class PaymentVerifier {
             if (value < this.requiredAmountWei) {
                 return {
                     valid: false,
+                    errorCode: 'INSUFFICIENT_AMOUNT',
                     error: `Insufficient amount: required ${this.requiredAmountWei.toString()}, got ${value.toString()}`,
                 };
             }
             const receiptRaw = await rpcCall(this.rpcUrl, 'eth_getTransactionReceipt', [txHash]);
             if (receiptRaw == null || typeof receiptRaw !== 'object') {
-                return { valid: false, error: 'Transaction receipt not found' };
+                return { valid: false, errorCode: 'RECEIPT_NOT_FOUND', error: 'Transaction receipt not found' };
             }
             const receipt = receiptRaw;
             if (!receipt.blockNumber) {
-                return { valid: false, error: 'Transaction not yet mined' };
+                return { valid: false, errorCode: 'TX_NOT_MINED', error: 'Transaction not yet mined' };
             }
-            const confirmations = 1;
+            const receiptBlock = Number(hexToBigInt(receipt.blockNumber));
+            if (!Number.isFinite(receiptBlock) || receiptBlock <= 0) {
+                return { valid: false, errorCode: 'INVALID_RECEIPT_BLOCKNUMBER', error: 'Invalid receipt: missing blockNumber' };
+            }
+            const headRaw = await rpcCall(this.rpcUrl, 'eth_blockNumber', []);
+            const headHex = typeof headRaw === 'string' ? headRaw : '';
+            const headBlock = Number(hexToBigInt(headHex));
+            if (!Number.isFinite(headBlock) || headBlock <= 0) {
+                return { valid: false, errorCode: 'RPC_HEAD_BLOCK_FAILED', error: 'RPC error: could not read current block number' };
+            }
+            const confirmations = Math.max(0, headBlock - receiptBlock + 1);
             if (confirmations < this.minConfirmations) {
                 return {
                     valid: false,
                     confirmations,
+                    errorCode: 'INSUFFICIENT_CONFIRMATIONS',
                     error: `Insufficient confirmations: required ${this.minConfirmations}, got ${confirmations}`,
                 };
             }
@@ -150,8 +169,7 @@ class PaymentVerifier {
             else {
                 message = `Verification failed: ${message}`;
             }
-            console.error('[PaymentVerifier] Verification failed:', message, err instanceof Error ? err.stack : '');
-            return { valid: false, error: message };
+            return { valid: false, errorCode: 'VERIFICATION_FAILED', error: message };
         }
     }
 }

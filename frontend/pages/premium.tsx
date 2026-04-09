@@ -14,12 +14,13 @@ const RESOURCE_ID = 'premium-article';
 
 function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(TOKEN_KEY);
+  // Prefer session-scoped storage to reduce exposure window if XSS occurs.
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
 function setStoredToken(token: string): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 export default function PremiumPage() {

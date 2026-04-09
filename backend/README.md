@@ -53,10 +53,12 @@ initializeX402({
   recipientAddress: process.env.MERCHANT_ADDRESS,
   // Required payment amount in tRBTC (string)
   requiredAmount: "0.0001",
-  // Confirmations required before unlock (demo: 1; production: 2+)
-  minConfirmations: 1,
+  // Confirmations required before unlock (production recommended: 6+)
+  minConfirmations: 6,
   // Secret used to sign JWT tokens
   jwtSecret: process.env.JWT_SECRET,
+  // Optional: sign 402 payment details to prevent MITM address swapping
+  merchantSigPrivateKey: process.env.MERCHANT_SIG_PRIVATE_KEY,
 });
 
 // Protect anything under /premium
@@ -90,18 +92,19 @@ Key options:
 - `rpcUrl` (optional): Rootstock JSON-RPC URL (default: Rootstock testnet public RPC)
 - `recipientAddress`: merchant address (0x…)
 - `requiredAmount`: tRBTC amount required (string, e.g. `"0.0001"`)
-- `minConfirmations` (optional): confirmations required (default: `3`)
+- `minConfirmations` (optional): confirmations required (default: `6`)
 - `jwtSecret`: JWT signing secret
 - `chainId` (optional): Rootstock chain id (31 testnet, 30 mainnet)
 - `storagePath` (optional): where used tx hashes and usage logs are stored
 - `rateLimitMax` / `rateLimitWindowMs` (optional): unlock verification rate limits
+- `merchantSigPrivateKey` / `merchantSigTtlSeconds` (optional): signs 402 payment details; verified by frontend
 
 ### `x402Middleware({ resourceId, price, recipientAddress?, accessDurationSeconds? })`
 
 Express middleware that:
 
 - Validates a JWT token (Authorization header)
-- Returns **402** with `{ price, address, resourceId }` when payment is required
+- Returns **402** with `{ price, address, resourceId, chainId, addressSig, addressSigExpiresAt, addressSigSigner }` when payment is required (signature fields included when `merchantSigPrivateKey` is set)
 
 ### `createUnlockRoute(rateLimitKey?)`
 
@@ -133,7 +136,8 @@ npm test
 ## Notes
 
 - **Security**: set a strong `JWT_SECRET` in real deployments.
-- **Confirmations**: use `minConfirmations >= 2` in production.
+- **Confirmations**: use `minConfirmations >= 6` in production.
+- **HTTPS**: enforce HTTPS in production deployments (the middleware supports `enforceHttps`).
 - **RPC reliability**: use a reliable Rootstock RPC provider (public RPCs can be slow or rate-limited).
 
 # @x402/unlocker

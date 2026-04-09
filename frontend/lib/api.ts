@@ -5,6 +5,10 @@ export interface PaymentRequired402 {
   price: string;
   address: string;
   resourceId?: string;
+  chainId?: number;
+  addressSig?: string;
+  addressSigExpiresAt?: number;
+  addressSigSigner?: string;
 }
 
 export interface UnlockResponse {
@@ -27,14 +31,19 @@ export async function fetchPremiumArticle(token?: string | null): Promise<{
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${getBaseUrl()}/premium/article`, { headers });
-  const data = await res.json().catch(() => ({}));
+  let data: any = {};
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
   if (res.status === 402) {
     return { status: 402, ok: false, paymentRequired: data as PaymentRequired402 };
   }
   if (!res.ok) {
     return { status: res.status, ok: false };
   }
-  return { status: res.status, ok: true, data };
+  return { status: res.status, ok: true, data: data as { title: string; content: string; publishedAt?: string } };
 }
 
 export async function unlockWithTxHash(txHash: string, resourceId: string): Promise<UnlockResponse> {
@@ -43,7 +52,12 @@ export async function unlockWithTxHash(txHash: string, resourceId: string): Prom
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ txHash, resourceId }),
   });
-  const data = await res.json();
+  let data: any = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
   if (!res.ok) throw new Error(data?.error || `Unlock failed: ${res.status}`);
   return data as UnlockResponse;
 }

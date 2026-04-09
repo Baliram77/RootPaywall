@@ -20,11 +20,15 @@ This premium article covers advanced strategies for DeFi trading on Rootstock:
 };
 
 function logPayment(txHash: string, userAddress: string, resourceId: string, amount: string): void {
-  console.log(`[PAYMENT] txHash=${txHash} user=${userAddress} resourceId=${resourceId} amount=${amount}`);
+  if (process.env.DEBUG) {
+    console.log(`[PAYMENT] txHash=${txHash} user=${userAddress} resourceId=${resourceId} amount=${amount}`);
+  }
 }
 
 function logUnlock(userAddress: string, resourceId: string): void {
-  console.log(`[UNLOCK] user=${userAddress} resourceId=${resourceId}`);
+  if (process.env.DEBUG) {
+    console.log(`[UNLOCK] user=${userAddress} resourceId=${resourceId}`);
+  }
 }
 
 export function registerRoutes(app: IRouter): void {
@@ -32,9 +36,10 @@ export function registerRoutes(app: IRouter): void {
     rpcUrl: config.rootstockRpcUrl,
     recipientAddress: config.merchantAddress,
     requiredAmount: config.premiumPrice,
-    minConfirmations: 1, // 1 = accept as soon as tx is mined (demo-friendly; use 2+ in production)
+    minConfirmations: config.minConfirmations,
     jwtSecret: config.jwtSecret,
     storagePath: '.x402-demo',
+    merchantSigPrivateKey: config.merchantSigPrivateKey || undefined,
   });
 
   app.get('/public/article', (_req: Request, res: Response) => {

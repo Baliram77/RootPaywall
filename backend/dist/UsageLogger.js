@@ -42,6 +42,7 @@ const path = __importStar(require("path"));
 const DEFAULT_STORAGE_DIR = '.x402';
 const USAGE_LOG_FILE = 'usage.json';
 const USED_TX_FILE = 'used-tx.json';
+const CLAIMS_DIR = 'claims';
 function ensureDir(dir) {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -67,6 +68,7 @@ class UsageLogger {
             : path.join(process.cwd(), DEFAULT_STORAGE_DIR);
         this.usagePath = path.join(base, USAGE_LOG_FILE);
         this.usedTxPath = path.join(base, USED_TX_FILE);
+        this.claimsDir = path.join(base, CLAIMS_DIR);
     }
     /** Log a usage event (payment + resource access). */
     log(entry) {
@@ -79,6 +81,39 @@ class UsageLogger {
         const set = readJson(this.usedTxPath, {});
         set[txHash.toLowerCase()] = true;
         writeJson(this.usedTxPath, set);
+    }
+    /**
+     * Atomically claim a tx hash to prevent concurrent verification (TOCTOU).
+     * Uses an exclusive lock file per tx hash, which is safe across processes.
+     *
+     * Returns true if claimed, false if already claimed/used.
+     */
+    claimTxHash(txHash) {
+        const normalized = txHash.toLowerCase();
+        if (this.isTxUsed(normalized))
+            return false;
+        ensureDir(this.claimsDir);
+        const lockPath = path.join(this.claimsDir, `${normalized}.lock`);
+        try {
+            const fd = fs.openSync(lockPath, 'wx');
+            fs.closeSync(fd);
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    /** Release a previously claimed tx hash (best-effort). */
+    releaseTxHash(txHash) {
+        const normalized = txHash.toLowerCase();
+        const lockPath = path.join(this.claimsDir, `${normalized}.lock`);
+        try {
+            if (fs.existsSync(lockPath))
+                fs.unlinkSync(lockPath);
+        }
+        catch {
+            // ignore
+        }
     }
     /** Check if a tx hash was already used. */
     isTxUsed(txHash) {

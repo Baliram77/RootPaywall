@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { parseEther } from 'ethers';
+import { parseEther, verifyMessage } from 'ethers';
 import { sendPayment } from '@/lib/blockchain';
 import type { PaymentRequired402 } from '@/lib/api';
 import Modal from '@/components/ui/Modal';
@@ -22,23 +22,70 @@ export default function PaymentModal({ paymentRequired, resourceId, onUnlock, on
   const [step, setStep] = useState<'confirm' | 'sending' | 'unlocking' | 'done' | 'error'>('confirm');
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
   const toast = useToast();
   const isZeroAddress = paymentRequired.address?.toLowerCase?.() === '0x0000000000000000000000000000000000000000';
 
+  const isProcessing = step === 'sending' || step === 'unlocking';
+
+  const assertSignedPaymentDetails = () => {
+    const expectedSigner = (process.env.NEXT_PUBLIC_MERCHANT_SIG_SIGNER || '').trim().toLowerCase();
+    const sig = paymentRequired.addressSig;
+    const expiresAt = paymentRequired.addressSigExpiresAt;
+    const chainId = paymentRequired.chainId ?? 31;
+
+    if (!expectedSigner) return; // demo-friendly: allow unsigned unless app config requires it
+    if (!sig || !expiresAt) {
+      throw new Error('Unsigned payment details. Refusing to pay (missing merchant signature).');
+    }
+    const now = Math.floor(Date.now() / 1000);
+    if (expiresAt <= now) {
+      throw new Error('Merchant signature expired. Refresh and try again.');
+    }
+
+    const message = [
+      'x402',
+      'payment-required',
+      paymentRequired.address.toLowerCase(),
+      paymentRequired.price,
+      resourceId,
+      String(chainId),
+      String(expiresAt),
+    ].join('|');
+
+    const recovered = verifyMessage(message, sig).toLowerCase();
+    if (recovered !== expectedSigner) {
+      throw new Error('Invalid merchant signature. Refusing to pay.');
+    }
+  };
+
   const handlePayAndUnlock = async () => {
     setError(null);
+    setTimedOut(false);
     setStep('sending');
     try {
-      const valueWei = parseEther(paymentRequired.price);
+      assertSignedPaymentDetails();
+
+      let valueWei;
+      try {
+        valueWei = parseEther(paymentRequired.price);
+      } catch {
+        throw new Error('Invalid price format');
+      }
       const hash = await sendPayment(paymentRequired.address, valueWei);
       setTxHash(hash);
       toast.push({ tone: 'info', title: 'Transaction submitted', message: 'Waiting for confirmation…' });
       setStep('unlocking');
-      await onUnlock(hash);
+      const timeoutMs = 60_000;
+      await Promise.race([
+        onUnlock(hash),
+        new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Verification timeout')), timeoutMs)),
+      ]);
       toast.push({ tone: 'success', title: 'Unlocked', message: 'Premium access token saved.' });
       setStep('done');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Payment or unlock failed';
+      if (msg.toLowerCase().includes('timeout')) setTimedOut(true);
       toast.push({ tone: 'error', title: 'Unlock failed', message: msg });
       setError(msg);
       setStep('error');
@@ -51,6 +98,7 @@ export default function PaymentModal({ paymentRequired, resourceId, onUnlock, on
       title="Payment Required"
       description="Send tRBTC on Rootstock Testnet to unlock this premium resource."
       onClose={onClose}
+      closeOnBackdrop={!isProcessing}
     >
       <div className="space-y-4">
         <Card className="p-0 overflow-hidden">
@@ -113,24 +161,55 @@ export default function PaymentModal({ paymentRequired, resourceId, onUnlock, on
         </Card>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose} aria-label="Close payment modal">
             Close
           </Button>
           {step === 'confirm' && (
-            <Button variant="primary" onClick={handlePayAndUnlock} disabled={isZeroAddress}>
+            <Button
+              variant="primary"
+              onClick={handlePayAndUnlock}
+              disabled={isZeroAddress}
+              aria-label="Unlock content"
+            >
               Unlock with tRBTC
             </Button>
           )}
           {step === 'error' && (
-            <Button
-              variant="primary"
-              onClick={() => {
-                setStep('confirm');
-                setError(null);
-              }}
-            >
-              Try again
-            </Button>
+            <div className="flex gap-3">
+              {timedOut && txHash && (
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    setError(null);
+                    setTimedOut(false);
+                    setStep('unlocking');
+                    try {
+                      await onUnlock(txHash);
+                      toast.push({ tone: 'success', title: 'Unlocked', message: 'Premium access token saved.' });
+                      setStep('done');
+                    } catch (e) {
+                      const m = e instanceof Error ? e.message : 'Unlock failed';
+                      setError(m);
+                      setStep('error');
+                    }
+                  }}
+                  aria-label="Retry verification"
+                >
+                  Retry verification
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setStep('confirm');
+                  setError(null);
+                  setTimedOut(false);
+                }}
+                aria-label="Try payment again"
+              >
+                Try again
+              </Button>
+            </div>
           )}
         </div>
       </div>
