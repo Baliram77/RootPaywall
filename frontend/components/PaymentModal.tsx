@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { parseEther, verifyMessage } from 'ethers';
 import { sendPayment } from '@/lib/blockchain';
 import type { PaymentRequired402 } from '@/lib/api';
@@ -32,16 +32,26 @@ export default function PaymentModal({
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [timedOut, setTimedOut] = useState(false);
+  const [autoRetry, setAutoRetry] = useState(true);
+  const [confirmationsHint, setConfirmationsHint] = useState<number | null>(null);
   const toast = useToast();
   const isZeroAddress = paymentRequired.address?.toLowerCase?.() === '0x0000000000000000000000000000000000000000';
 
   const isProcessing = step === 'sending' || step === 'unlocking';
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     if (initialTxHash && !txHash) {
       setTxHash(initialTxHash);
     }
   }, [initialTxHash, txHash]);
+
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+  }, []);
 
   const setTxHashAndPersist = (hash: string | null) => {
     setTxHash(hash);
@@ -82,6 +92,7 @@ export default function PaymentModal({
   const handlePayAndUnlock = async () => {
     setError(null);
     setTimedOut(false);
+    setConfirmationsHint(null);
     setStep('sending');
     try {
       assertSignedPaymentDetails();
@@ -95,14 +106,7 @@ export default function PaymentModal({
       const hash = await sendPayment(paymentRequired.address, valueWei);
       setTxHashAndPersist(hash);
       toast.push({ tone: 'info', title: 'Transaction submitted', message: 'Waiting for confirmation…' });
-      setStep('unlocking');
-      const timeoutMs = 60_000;
-      await Promise.race([
-        onUnlock(hash),
-        new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Verification timeout')), timeoutMs)),
-      ]);
-      toast.push({ tone: 'success', title: 'Unlocked', message: 'Premium access token saved.' });
-      setStep('done');
+      setStep('unlocking'); // auto-retry will take over
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Payment or unlock failed';
       if (msg.toLowerCase().includes('timeout')) setTimedOut(true);
@@ -112,10 +116,11 @@ export default function PaymentModal({
     }
   };
 
-  const handleVerifyOnly = async () => {
+  const handleVerifyOnly = async (): Promise<void> => {
     if (!txHash) return;
     setError(null);
     setTimedOut(false);
+    setConfirmationsHint(null);
     setStep('unlocking');
     try {
       const timeoutMs = 60_000;
@@ -128,10 +133,34 @@ export default function PaymentModal({
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unlock failed';
       if (String(msg).toLowerCase().includes('timeout')) setTimedOut(true);
+      const m = String(msg);
+      const match = m.match(/got\s+(\d+)/i);
+      if (match?.[1]) {
+        const n = Number(match[1]);
+        if (Number.isFinite(n)) setConfirmationsHint(n);
+      }
       setError(msg);
       setStep('error');
     }
   };
+
+  // Auto-retry verification while waiting for confirmations / indexing.
+  useEffect(() => {
+    if (!autoRetry) return;
+    if (step !== 'unlocking') return;
+    if (!txHash) return;
+
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = setTimeout(async () => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      try {
+        await handleVerifyOnly();
+      } finally {
+        inFlightRef.current = false;
+      }
+    }, 15_000);
+  }, [autoRetry, step, txHash]);
 
   return (
     <Modal
@@ -167,7 +196,11 @@ export default function PaymentModal({
               {(step === 'sending' || step === 'unlocking') && (
                 <div className="flex items-center gap-2 text-sm text-rsk-muted">
                   <Spinner className="h-4 w-4 border-rsk-primary" />
-                  {step === 'sending' ? 'Waiting for wallet confirmation…' : 'Transaction pending / verifying…'}
+                  {step === 'sending'
+                    ? 'Waiting for wallet confirmation…'
+                    : confirmationsHint != null
+                      ? `Waiting for confirmations… (currently ${confirmationsHint})`
+                      : 'Transaction pending / verifying…'}
                 </div>
               )}
             </div>
@@ -205,6 +238,15 @@ export default function PaymentModal({
           <Button variant="secondary" onClick={onClose} aria-label="Close payment modal">
             Close
           </Button>
+          {(step === 'unlocking' || step === 'error') && txHash && (
+            <Button
+              variant="ghost"
+              onClick={() => setAutoRetry((v) => !v)}
+              aria-label={autoRetry ? 'Disable auto retry' : 'Enable auto retry'}
+            >
+              {autoRetry ? 'Auto retry: ON' : 'Auto retry: OFF'}
+            </Button>
+          )}
           {step === 'confirm' && (
             <div className="flex gap-3">
               {txHash && (
@@ -241,6 +283,7 @@ export default function PaymentModal({
                   setStep('confirm');
                   setError(null);
                   setTimedOut(false);
+                  setConfirmationsHint(null);
                 }}
                 aria-label="Try payment again"
               >

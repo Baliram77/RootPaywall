@@ -32,7 +32,7 @@ Then set:
 | `ROOTSTOCK_RPC_URL` | yes | Rootstock JSON-RPC URL (Testnet) |
 | `MERCHANT_ADDRESS` | yes | Your Rootstock address to receive tRBTC |
 | `JWT_SECRET` | yes | Secret used to sign access tokens |
-| `MIN_CONFIRMATIONS` | no | Confirmations required before unlock (default: `6`) |
+| `MIN_CONFIRMATIONS` | no | Confirmations required before unlock (default: `6`; for demo you can use `1`) |
 | `MERCHANT_SIG_PRIVATE_KEY` | no | If set, demo-backend will sign 402 payment details (recommended) |
 | `PORT` | no | Server port (default: `3000`) |
 
