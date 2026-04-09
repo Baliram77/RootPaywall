@@ -82,7 +82,7 @@ export default function WalletConnect() {
             <p className="text-sm text-rsk-muted">
               Connect to unlock premium content using <span className="text-rsk-text">tRBTC</span>.
             </p>
-            <Button onClick={connect} loading={loading} variant="primary">
+            <Button onClick={connect} loading={loading} variant="primary" aria-label="Connect Wallet">
               {loading ? 'Connecting…' : 'Connect Wallet'}
             </Button>
           </div>
@@ -100,7 +100,12 @@ export default function WalletConnect() {
               </div>
             </div>
             {!isCorrectNetwork && (
-              <Button onClick={connect} loading={loading} variant="secondary">
+              <Button
+                onClick={connect}
+                loading={loading}
+                variant="secondary"
+                aria-label="Switch to Rootstock Testnet"
+              >
                 Switch to Rootstock Testnet
               </Button>
             )}

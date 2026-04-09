@@ -90,7 +90,9 @@ export function registerRoutes(app: IRouter): void {
         }
         res.json({ token: result.token, expiresIn: result.expiresIn });
       } else {
-        console.error('[unlock] Verification failed:', result.error);
+        if (process.env.DEBUG) {
+          console.error('[unlock] Verification failed:', result.error);
+        }
         res.status(400).json({ error: result.error });
       }
     } catch (err) {

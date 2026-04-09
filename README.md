@@ -45,7 +45,9 @@ cp .env.example .env
 Edit `demo-backend/.env` and set:
 
 - `MERCHANT_ADDRESS` to your Rootstock Testnet wallet address (0x…)
-- `JWT_SECRET` to any long random string (for demo, any string works)
+- `JWT_SECRET` to a long random string
+- (optional) `MIN_CONFIRMATIONS` (default `6`; lower it for faster demo unlocks)
+- (optional, recommended) `MERCHANT_SIG_PRIVATE_KEY` to sign 402 payment details
 
 The backend will **fail fast** on startup if `MERCHANT_ADDRESS` is missing or still the placeholder.
 

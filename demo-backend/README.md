@@ -32,6 +32,8 @@ Then set:
 | `ROOTSTOCK_RPC_URL` | yes | Rootstock JSON-RPC URL (Testnet) |
 | `MERCHANT_ADDRESS` | yes | Your Rootstock address to receive tRBTC |
 | `JWT_SECRET` | yes | Secret used to sign access tokens |
+| `MIN_CONFIRMATIONS` | no | Confirmations required before unlock (default: `6`) |
+| `MERCHANT_SIG_PRIVATE_KEY` | no | If set, demo-backend will sign 402 payment details (recommended) |
 | `PORT` | no | Server port (default: `3000`) |
 
 If `MERCHANT_ADDRESS` is missing or still the placeholder, the server will exit on startup with an error.
@@ -83,7 +85,11 @@ Response body contains the payment requirements:
   "error": "Payment Required",
   "price": "0.0001",
   "address": "0x...",
-  "resourceId": "premium-article"
+  "resourceId": "premium-article",
+  "chainId": 31,
+  "addressSig": "0x...",
+  "addressSigExpiresAt": 1712345678,
+  "addressSigSigner": "0x..."
 }
 ```
 

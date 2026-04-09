@@ -177,7 +177,7 @@ initializeX402({
   rpcUrl: 'https://public-node.testnet.rsk.co',  // optional, testnet default
   recipientAddress: merchantAddress,
   requiredAmount: '0.0001',   // tRBTC per access
-  minConfirmations: 3,
+  minConfirmations: 6,
   jwtSecret: process.env.JWT_SECRET || 'your-secret',
 });
 
@@ -206,11 +206,13 @@ Call once before using middleware or unlock route.
 | `rpcUrl` | string | Rootstock testnet RPC | JSON-RPC URL (e.g. `https://public-node.testnet.rsk.co`) |
 | `recipientAddress` | string | required | Merchant Rootstock address |
 | `requiredAmount` | string | required | Amount in tRBTC (e.g. `'0.0001'`) |
-| `minConfirmations` | number | `3` | Block confirmations required |
+| `minConfirmations` | number | `6` | Block confirmations required |
 | `jwtSecret` | string | required | Secret for signing access JWTs |
 | `storagePath` | string | `.x402` in cwd | Directory for usage log and used-tx storage |
 | `rateLimitMax` | number | `30` | Max verification attempts per key per window |
 | `rateLimitWindowMs` | number | `60000` | Rate limit window (ms) |
+| `merchantSigPrivateKey` | string | optional | Signs 402 payment details to prevent MITM address swapping |
+| `merchantSigTtlSeconds` | number | `300` | Signature TTL (seconds) |
 
 Returns the `UnlockService` instance.
 
@@ -228,6 +230,7 @@ Express middleware. If request has no valid `Authorization: Bearer <token>` (or 
 ```
 
 Options: `resourceId`, `price` (string or number), optional `recipientAddress`, optional `accessDurationSeconds`.
+Also supports `enforceHttps` (recommended true in production) to reject non-HTTPS requests.
 
 ### `createUnlockRoute(rateLimitKey?)`
 
