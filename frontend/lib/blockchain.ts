@@ -60,7 +60,12 @@ export async function sendPayment(to: string, valueWei: bigint): Promise<string>
   // Use raw checksummed address so ethers doesn't try ENS (Rootstock doesn't support ENS)
   const toAddress = getAddress(to);
   const tx = await signer.sendTransaction({ to: toAddress, value: valueWei, gasLimit: 21000 });
-  const receipt = await tx.wait();
+  const receipt = await Promise.race([
+    tx.wait(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Transaction confirmation timeout (60s)')), 60_000)
+    ),
+  ]);
   return receipt!.hash;
 }
 

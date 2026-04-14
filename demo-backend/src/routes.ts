@@ -80,6 +80,15 @@ export function registerRoutes(app: IRouter): void {
         res.status(400).json({ error: 'Missing txHash or resourceId' });
         return;
       }
+      const TX_HASH_REGEX = /^0x[0-9a-fA-F]{64}$/;
+      if (!TX_HASH_REGEX.test(String(txHash))) {
+        res.status(400).json({ error: 'Invalid txHash format' });
+        return;
+      }
+      if (!/^[a-zA-Z0-9._:-]{1,128}$/.test(String(resourceId))) {
+        res.status(400).json({ error: 'Invalid resourceId format' });
+        return;
+      }
       const key = req.ip || (req.socket?.remoteAddress as string) || 'unknown';
       const result = await service.verifyAndUnlock(txHash, resourceId, key);
       if (result.success) {
