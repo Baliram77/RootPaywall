@@ -4,6 +4,7 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import type { X402MiddlewareOptions, PaymentRequiredResponse } from './types';
+import { readAccessToken, setAccessTokenCookie } from './tokenAuth';
 
 /** Module-level unlock service set by initializeX402 */
 let unlockServiceInstance: import('./unlockService').UnlockService | null = null;
@@ -49,12 +50,7 @@ export function rejectIfNotHttps(req: Request, res: Response): boolean {
 }
 
 /** Read bearer token from Authorization header only (no query/body leakage). */
-export function readBearerToken(req: Request): string | null {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7).trim();
-  return token || null;
-}
+export { readBearerToken, readAccessToken, setAccessTokenCookie, clearAccessTokenCookie, X402_ACCESS_COOKIE } from './tokenAuth';
 
 export interface CreateUnlockRouteOptions {
   rateLimitKey?: (req: Request) => string;
@@ -103,7 +99,7 @@ export function x402Middleware(options: X402MiddlewareOptions) {
       return;
     }
 
-    const token = readBearerToken(req);
+    const token = readAccessToken(req);
 
     if (!token) {
       const sig = service.createPaymentRequiredSignature({
@@ -226,7 +222,8 @@ export function createUnlockRoute(
       const result = await service.verifyAndUnlock(txHash, resourceId, key);
 
       if (result.success) {
-        res.json({ token: result.token, expiresIn: result.expiresIn });
+        setAccessTokenCookie(res, result.token, result.expiresIn);
+        res.json({ success: true, expiresIn: result.expiresIn });
       } else {
         res.status(400).json({ error: result.error, code: result.code });
       }

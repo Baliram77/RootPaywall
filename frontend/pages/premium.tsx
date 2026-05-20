@@ -9,20 +9,8 @@ import WalletConnect from '@/components/WalletConnect';
 import Button from '@/components/ui/Button';
 import { GradientCard } from '@/components/ui/Card';
 
-const TOKEN_KEY = 'x402_premium_token';
 const LAST_TX_KEY = 'x402_last_tx';
 const RESOURCE_ID = 'premium-article';
-
-function getStoredToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  // Prefer session-scoped storage to reduce exposure window if XSS occurs.
-  return sessionStorage.getItem(TOKEN_KEY);
-}
-
-function setStoredToken(token: string): void {
-  if (typeof window === 'undefined') return;
-  sessionStorage.setItem(TOKEN_KEY, token);
-}
 
 function getStoredLastTx(): string | null {
   if (typeof window === 'undefined') return null;
@@ -43,10 +31,10 @@ export default function PremiumPage() {
   const [showModal, setShowModal] = useState(false);
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
 
-  const loadPremium = useCallback(async (token: string | null) => {
+  const loadPremium = useCallback(async () => {
     setStatus('loading');
     setErrorMessage(null);
-    const result = await fetchPremiumArticle(token);
+    const result = await fetchPremiumArticle();
     if (result.ok && result.data) {
       setData(result.data);
       setPaymentRequired(null);
@@ -64,7 +52,7 @@ export default function PremiumPage() {
   }, []);
 
   useEffect(() => {
-    loadPremium(getStoredToken());
+    loadPremium();
   }, [loadPremium]);
 
   useEffect(() => {
@@ -72,11 +60,10 @@ export default function PremiumPage() {
   }, []);
 
   const handleUnlock = async (txHash: string) => {
-    const { token } = await unlockWithTxHash(txHash, paymentRequired?.resourceId || RESOURCE_ID);
-    setStoredToken(token);
+    await unlockWithTxHash(txHash, paymentRequired?.resourceId || RESOURCE_ID);
     setStoredLastTx(null);
     setLastTxHash(null);
-    await loadPremium(token);
+    await loadPremium();
   };
 
   const openPaymentModal = () => {

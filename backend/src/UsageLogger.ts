@@ -36,6 +36,7 @@ export interface UsageLoggerOptions {
   storagePath?: string;
   claimTtlMs?: number;
   redisUrl?: string;
+  allowSingleInstance?: boolean;
 }
 
 export class UsageLogger {
@@ -52,6 +53,7 @@ export class UsageLogger {
       storagePath: base,
       claimTtlMs: options.claimTtlMs,
       redisUrl: options.redisUrl,
+      allowSingleInstance: options.allowSingleInstance,
     });
   }
 

@@ -35,7 +35,8 @@ Then set:
 | `MIN_CONFIRMATIONS` | no | Confirmations required before unlock (default: `6`; for demo you can use `1`) |
 | `FRONTEND_URL` | no | Allowed frontend origin for CORS (default: `http://localhost:3001`) |
 | `MERCHANT_SIG_PRIVATE_KEY` | yes | Private key to sign 402 payment details (MITM protection). Must match `NEXT_PUBLIC_MERCHANT_SIG_SIGNER` in the frontend |
-| `X402_REDIS_URL` | no | Redis URL for multi-instance double-spend protection (recommended when running multiple replicas) |
+| `X402_REDIS_URL` | prod\* | Redis URL for cluster-wide claims and rate limits (\*required in production unless `X402_SINGLE_INSTANCE=true`) |
+| `X402_SINGLE_INSTANCE` | no | Set `true` only for known single-node production (file-based store) |
 | `X402_TRUST_PROXY` | no | Set `true` behind nginx/load balancer; auto-enabled in production unless `false` |
 | `PORT` | no | Server port (default: `3000`) |
 

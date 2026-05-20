@@ -12,7 +12,8 @@ Modern Web3 UI (Next.js + Tailwind) that unlocks premium content using Rootstock
   - user sends tRBTC payment in MetaMask
   - frontend posts `txHash` to `POST /unlock`
   - backend returns a JWT token
-  - token is stored in `sessionStorage` and premium request is retried automatically
+  - access token is stored in an **HttpOnly cookie** (set by backend on unlock; not readable by JavaScript / XSS)
+  - premium requests use same-origin `/api/*` proxy with `credentials: include`
   - the last submitted `txHash` is cached in `sessionStorage` so the user can **retry verification without paying again**
 - **UX polish**: skeleton loaders, toasts, animated modal + status indicators
 

@@ -9,35 +9,9 @@ import { PaymentVerifier } from './PaymentVerifier';
 import { AccessController } from './AccessController';
 import { UsageLogger } from './UsageLogger';
 import { FileRevocationStore } from './RevocationStore';
+import { createRateLimiter, type RateLimiter } from './RateLimiter';
+import { assertProductionStorage } from './RedisConnection';
 import type { ResourceConfig, UsageLogEntry, X402Config } from './types';
-
-/** Simple in-memory fixed-window rate limiter with TTL cleanup. */
-function createRateLimiter(maxPerWindow: number, windowMs: number) {
-  const buckets = new Map<string, { windowStart: number; count: number; lastSeen: number }>();
-  let lastGc = 0;
-  const gcEveryMs = Math.max(windowMs, 30_000);
-
-  return function isAllowed(key: string): boolean {
-    const now = Date.now();
-    if (now - lastGc > gcEveryMs) {
-      lastGc = now;
-      for (const [k, v] of buckets.entries()) {
-        if (now - v.lastSeen > windowMs * 2) buckets.delete(k);
-      }
-    }
-
-    const existing = buckets.get(key);
-    if (!existing || now - existing.windowStart >= windowMs) {
-      buckets.set(key, { windowStart: now, count: 1, lastSeen: now });
-      return true;
-    }
-
-    existing.lastSeen = now;
-    if (existing.count >= maxPerWindow) return false;
-    existing.count += 1;
-    return true;
-  };
-}
 
 export interface UnlockServiceOptions extends X402Config {
   /** Max verification attempts per IP (or key) per window. Default 30. */
@@ -46,6 +20,8 @@ export interface UnlockServiceOptions extends X402Config {
   rateLimitWindowMs?: number;
   claimTtlMs?: number;
   redisUrl?: string;
+  /** Allow file-based storage in production for single-node deployments. */
+  allowSingleInstance?: boolean;
 }
 
 export interface UnlockResult {
@@ -72,12 +48,18 @@ export class UnlockService {
   private chainId: number;
   private access: AccessController;
   private logger: UsageLogger;
-  private rateLimit: (key: string) => boolean;
+  private rateLimit: RateLimiter;
   private resourceConfigs: Map<string, ResourceConfig>;
   private merchantSigWallet: Wallet | null;
   private merchantSigTtlSeconds: number;
 
   constructor(options: UnlockServiceOptions) {
+    const redisUrl = (options.redisUrl ?? process.env.X402_REDIS_URL ?? '').trim();
+    assertProductionStorage({
+      redisUrl,
+      allowSingleInstance: options.allowSingleInstance,
+    });
+
     this.rpcUrl = options.rpcUrl;
     this.defaultRecipient = options.recipientAddress;
     this.chainId = options.chainId ?? 31;
@@ -87,8 +69,8 @@ export class UnlockService {
       storagePath: options.storagePath,
       claimTtlMs: options.claimTtlMs,
       redisUrl: options.redisUrl,
+      allowSingleInstance: options.allowSingleInstance,
     });
-    // Persist token revocations to the same storage base as usage logs (if configured).
     const base = options.storagePath
       ? path.resolve(options.storagePath)
       : path.join(process.cwd(), '.x402');
@@ -97,10 +79,12 @@ export class UnlockService {
       defaultExpirySeconds: 3600,
       revocationStore: new FileRevocationStore(path.join(base, 'revoked.json')),
     });
-    this.rateLimit = createRateLimiter(
-      options.rateLimitMax ?? 30,
-      options.rateLimitWindowMs ?? 60_000
-    );
+    this.rateLimit = createRateLimiter({
+      storagePath: base,
+      redisUrl: options.redisUrl,
+      maxPerWindow: options.rateLimitMax ?? 30,
+      windowMs: options.rateLimitWindowMs ?? 60_000,
+    });
     this.resourceConfigs = new Map();
     const requireMerchantSig = options.requireMerchantSig ?? true;
     if (requireMerchantSig && !options.merchantSigPrivateKey) {
@@ -141,19 +125,16 @@ export class UnlockService {
     ].join('|');
     const sig = this.merchantSigWallet.signMessageSync(message);
 
-    // Self-check to avoid shipping a bad signature due to misconfig.
     const recovered = verifyMessage(message, sig).toLowerCase();
     if (recovered !== this.merchantSigWallet.address.toLowerCase()) return null;
 
     return { sig, expiresAt, signer: this.merchantSigWallet.address };
   }
 
-  /** Register or override resource config (for dynamic pricing). */
   registerResource(config: ResourceConfig): void {
     this.resourceConfigs.set(config.resourceId, config);
   }
 
-  /** Get resource config; returns default pricing if not registered. */
   getResourceConfig(resourceId: string): ResourceConfig {
     const existing = this.resourceConfigs.get(resourceId);
     if (existing) return existing;
@@ -167,17 +148,13 @@ export class UnlockService {
     };
   }
 
-  /**
-   * Verify Rootstock payment and issue access token.
-   * Prevents double spend and rate limits verification attempts.
-   */
   async verifyAndUnlock(
     txHash: string,
     resourceId: string,
     rateLimitKey?: string
   ): Promise<UnlockResponse> {
     const key = rateLimitKey ?? 'global';
-    if (!this.rateLimit(key)) {
+    if (!(await this.rateLimit.isAllowed(key))) {
       return { success: false, error: 'Too many verification attempts' };
     }
 
@@ -193,7 +170,6 @@ export class UnlockService {
       return { success: false, error: 'Invalid price configuration' };
     }
 
-    // Atomically claim txHash before verification to prevent races.
     const claimed = await this.logger.claimTxHash(txHash);
     if (!claimed) {
       return { success: false, error: 'Transaction already used' };
@@ -211,7 +187,6 @@ export class UnlockService {
     const result = await verifier.verifyPayment(txHash);
 
     if (!result.valid) {
-      // Release claim so user can retry after confirmations/indexing.
       await this.logger.releaseTxHash(txHash);
       return {
         success: false,

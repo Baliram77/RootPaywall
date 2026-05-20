@@ -27,6 +27,8 @@ export interface X402Config {
   claimTtlMs?: number;
   /** Redis URL for cluster-wide tx claims (env: X402_REDIS_URL). */
   redisUrl?: string;
+  /** Allow file-based storage in production for single-node deployments (env: X402_SINGLE_INSTANCE=true). */
+  allowSingleInstance?: boolean;
   /**
    * Optional: private key used to sign 402 payment details (prevents MITM address swapping).
    * If set, middleware will include signature fields in the 402 response.

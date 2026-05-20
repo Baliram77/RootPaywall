@@ -37,6 +37,8 @@ export const config = {
   resourceId: 'premium-article',
   minConfirmations: parseInt(process.env.MIN_CONFIRMATIONS ?? '6', 10),
   merchantSigPrivateKey: (process.env.MERCHANT_SIG_PRIVATE_KEY ?? '').trim(),
+  redisUrl: (process.env.X402_REDIS_URL ?? '').trim(),
+  allowSingleInstance: process.env.X402_SINGLE_INSTANCE === 'true',
 } as const;
 
 if (!config.merchantAddress) {

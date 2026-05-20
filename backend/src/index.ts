@@ -12,7 +12,8 @@ import { UnlockService } from './unlockService';
 import { setUnlockService } from './x402Middleware';
 import { DEFAULT_ROOTSTOCK_TESTNET_RPC } from './types';
 
-export { x402Middleware, createUnlockRoute, setUnlockService, getUnlockService, resolveEnforceHttps, rejectIfNotHttps, configureExpressTrustProxy, readBearerToken } from './x402Middleware';
+export { x402Middleware, createUnlockRoute, setUnlockService, getUnlockService, resolveEnforceHttps, rejectIfNotHttps, configureExpressTrustProxy, readBearerToken, readAccessToken, setAccessTokenCookie, clearAccessTokenCookie, X402_ACCESS_COOKIE } from './x402Middleware';
+export { assertProductionStorage } from './RedisConnection';
 export type { CreateUnlockRouteOptions } from './x402Middleware';
 export { PaymentVerifier } from './PaymentVerifier';
 export { AccessController } from './AccessController';
@@ -43,6 +44,7 @@ export interface InitializeX402Options {
   rateLimitWindowMs?: number;
   claimTtlMs?: number;
   redisUrl?: string;
+  allowSingleInstance?: boolean;
   /** Optional: sign 402 payment details to prevent MITM swapping. */
   merchantSigPrivateKey?: string;
   merchantSigTtlSeconds?: number;
@@ -67,6 +69,7 @@ export function initializeX402(options: InitializeX402Options): UnlockService {
     rateLimitWindowMs: options.rateLimitWindowMs,
     claimTtlMs: options.claimTtlMs,
     redisUrl: options.redisUrl,
+    allowSingleInstance: options.allowSingleInstance,
     merchantSigPrivateKey: options.merchantSigPrivateKey,
     merchantSigTtlSeconds: options.merchantSigTtlSeconds,
     requireMerchantSig: options.requireMerchantSig,

@@ -97,6 +97,19 @@ describe('x402 middleware and unlock', () => {
     expect(res.status).toBe(402);
   });
 
+  it('accepts HttpOnly cookie token', async () => {
+    const access = new AccessController({ jwtSecret });
+    const token = access.generateAccessToken('0xuser', 'premium-api');
+    app.use('/premium', x402Middleware({ resourceId: 'premium-api', price: '0.0001' }));
+    app.get('/premium/data', (_req: Request, res: Response) => res.json({ data: 'secret' }));
+
+    const res = await request(app)
+      .get('/premium/data')
+      .set('Cookie', `x402_access_token=${encodeURIComponent(token)}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBe('secret');
+  });
+
   it('getUnlockService should return service after init', () => {
     expect(getUnlockService()).not.toBeNull();
   });

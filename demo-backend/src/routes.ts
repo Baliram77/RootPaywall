@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import type { IRouter } from 'express';
-import { initializeX402, x402Middleware, getUnlockService, rejectIfNotHttps, resolveEnforceHttps } from '@x402/unlocker';
+import { initializeX402, x402Middleware, getUnlockService, rejectIfNotHttps, resolveEnforceHttps, setAccessTokenCookie } from '@x402/unlocker';
 import { config } from './config';
 
 const PREMIUM_ARTICLE = {
@@ -40,6 +40,8 @@ export function registerRoutes(app: IRouter): void {
     jwtSecret: config.jwtSecret,
     storagePath: '.x402-demo',
     merchantSigPrivateKey: config.merchantSigPrivateKey,
+    redisUrl: config.redisUrl || undefined,
+    allowSingleInstance: config.allowSingleInstance,
   });
 
   app.get('/public/article', (_req: Request, res: Response) => {
@@ -103,7 +105,8 @@ export function registerRoutes(app: IRouter): void {
             result.usage.paymentAmount
           );
         }
-        res.json({ token: result.token, expiresIn: result.expiresIn });
+        setAccessTokenCookie(res, result.token, result.expiresIn);
+        res.json({ success: true, expiresIn: result.expiresIn });
       } else {
         if (process.env.DEBUG) {
           console.error('[unlock] Verification failed:', result.error);

@@ -6,6 +6,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { getRedisClient, assertProductionStorage } from './RedisConnection';
 
 const DEFAULT_CLAIM_TTL_MS = 10 * 60 * 1000;
 const STORAGE_LOCK_STALE_MS = 30_000;
@@ -21,6 +22,8 @@ export interface ClaimStoreOptions {
   claimTtlMs?: number;
   /** Redis URL for cluster-wide claims (env: X402_REDIS_URL). */
   redisUrl?: string;
+  /** Allow file-based store in production for single-node deployments. */
+  allowSingleInstance?: boolean;
 }
 
 export interface ClaimStore {
@@ -142,25 +145,16 @@ class FileClaimStore implements ClaimStore {
 }
 
 class RedisClaimStore implements ClaimStore {
-  private client: import('redis').RedisClientType;
+  private redisUrl: string;
   private claimTtlSec: number;
-  private connected = false;
 
   constructor(redisUrl: string, claimTtlMs: number) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createClient } = require('redis') as typeof import('redis');
-    this.client = createClient({ url: redisUrl });
+    this.redisUrl = redisUrl;
     this.claimTtlSec = Math.max(1, Math.ceil(claimTtlMs / 1000));
-    this.client.on('error', () => {
-      // surfaced on command failure
-    });
   }
 
-  private async ensureConnected(): Promise<void> {
-    if (!this.connected) {
-      await this.client.connect();
-      this.connected = true;
-    }
+  private async client(): Promise<Awaited<ReturnType<typeof getRedisClient>>> {
+    return getRedisClient(this.redisUrl);
   }
 
   private usedKey(txHash: string): string {
@@ -172,10 +166,10 @@ class RedisClaimStore implements ClaimStore {
   }
 
   async claimTxHash(txHash: string): Promise<boolean> {
-    await this.ensureConnected();
+    const client = await this.client();
     const normalized = txHash.toLowerCase();
-    if (await this.client.exists(this.usedKey(normalized))) return false;
-    const result = await this.client.set(this.claimKey(normalized), '1', {
+    if (await client.exists(this.usedKey(normalized))) return false;
+    const result = await client.set(this.claimKey(normalized), '1', {
       NX: true,
       EX: this.claimTtlSec,
     });
@@ -183,36 +177,35 @@ class RedisClaimStore implements ClaimStore {
   }
 
   async releaseTxHash(txHash: string): Promise<void> {
-    await this.ensureConnected();
-    await this.client.del(this.claimKey(txHash.toLowerCase()));
+    const client = await this.client();
+    await client.del(this.claimKey(txHash.toLowerCase()));
   }
 
   async markTxUsed(txHash: string): Promise<void> {
-    await this.ensureConnected();
+    const client = await this.client();
     const normalized = txHash.toLowerCase();
-    await this.client.set(this.usedKey(normalized), '1');
-    await this.client.del(this.claimKey(normalized));
+    await client.set(this.usedKey(normalized), '1');
+    await client.del(this.claimKey(normalized));
   }
 
   async isTxUsed(txHash: string): Promise<boolean> {
-    await this.ensureConnected();
+    const client = await this.client();
     const normalized = txHash.toLowerCase();
-    if (await this.client.exists(this.usedKey(normalized))) return true;
-    return (await this.client.exists(this.claimKey(normalized))) === 1;
+    if (await client.exists(this.usedKey(normalized))) return true;
+    return (await client.exists(this.claimKey(normalized))) === 1;
   }
 }
 
 export function createClaimStore(options: ClaimStoreOptions = {}): ClaimStore {
   const claimTtlMs = options.claimTtlMs ?? DEFAULT_CLAIM_TTL_MS;
   const redisUrl = (options.redisUrl ?? process.env.X402_REDIS_URL ?? '').trim();
+
+  assertProductionStorage({
+    redisUrl,
+    allowSingleInstance: options.allowSingleInstance,
+  });
+
   if (redisUrl) {
-    try {
-      require.resolve('redis');
-    } catch {
-      throw new Error(
-        'X402_REDIS_URL is set but the redis package is not installed. Run: npm install redis'
-      );
-    }
     return new RedisClaimStore(redisUrl, claimTtlMs);
   }
   const base = options.storagePath
