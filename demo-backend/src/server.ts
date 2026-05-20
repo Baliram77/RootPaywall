@@ -1,9 +1,27 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { registerRoutes } from './routes';
 import { config } from './config';
 
 const app = express();
+
+app.use(
+  helmet({
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  })
+);
+
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    const proto = req.header('x-forwarded-proto');
+    if (proto !== 'https' && !req.secure) {
+      res.status(403).json({ error: 'HTTPS required' });
+      return;
+    }
+    next();
+  });
+}
 
 app.use(
   cors({

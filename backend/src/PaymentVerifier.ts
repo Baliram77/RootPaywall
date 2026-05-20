@@ -103,6 +103,7 @@ export class PaymentVerifier {
       if (!isValidTxHash(txHash)) {
         return { valid: false, errorCode: 'INVALID_TX_HASH', error: 'Invalid txHash format' };
       }
+      // Belt-and-suspenders: caller should claim txHash before verifyPayment (see UnlockService).
       const used = await this.isTxHashUsed(txHash);
       if (used) {
         return { valid: false, errorCode: 'TX_ALREADY_USED', error: 'Transaction already used' };

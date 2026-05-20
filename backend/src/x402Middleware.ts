@@ -18,6 +18,28 @@ export function getUnlockService(): import('./unlockService').UnlockService | nu
 
 const PAYMENT_REQUIRED_STATUS = 402;
 
+/** Default: enforce HTTPS in production or when X402_ENFORCE_HTTPS=true. */
+export function resolveEnforceHttps(override?: boolean): boolean {
+  return override ?? (process.env.NODE_ENV === 'production' || process.env.X402_ENFORCE_HTTPS === 'true');
+}
+
+/** Returns true if the request was rejected (not HTTPS). */
+export function rejectIfNotHttps(req: Request, res: Response): boolean {
+  const xfProto = (req.headers['x-forwarded-proto'] as string | undefined) ?? '';
+  const isHttps = req.secure || xfProto.toLowerCase().includes('https');
+  if (!isHttps) {
+    res.status(400).json({ error: 'HTTPS is required' });
+    return true;
+  }
+  return false;
+}
+
+export interface CreateUnlockRouteOptions {
+  rateLimitKey?: (req: Request) => string;
+  /** Enforce HTTPS (default: production or X402_ENFORCE_HTTPS=true). */
+  enforceHttps?: boolean;
+}
+
 /**
  * Express middleware: protects routes behind x402 payment.
  * - If valid JWT access token present → next()
@@ -28,9 +50,7 @@ export function x402Middleware(options: X402MiddlewareOptions) {
   const price = typeof options.price === 'number' ? String(options.price) : options.price;
   const recipientAddress = options.recipientAddress;
   const accessDurationSeconds = options.accessDurationSeconds;
-  const enforceHttps =
-    options.enforceHttps ??
-    (process.env.NODE_ENV === 'production' || process.env.X402_ENFORCE_HTTPS === 'true');
+  const enforceHttps = resolveEnforceHttps(options.enforceHttps);
 
   return function middleware(req: Request, res: Response, next: NextFunction): void {
     const service = getUnlockService();
@@ -39,13 +59,8 @@ export function x402Middleware(options: X402MiddlewareOptions) {
       return;
     }
 
-    if (enforceHttps) {
-      const xfProto = (req.headers['x-forwarded-proto'] as string | undefined) ?? '';
-      const isHttps = req.secure || xfProto.toLowerCase().includes('https');
-      if (!isHttps) {
-        res.status(400).json({ error: 'HTTPS is required' });
-        return;
-      }
+    if (enforceHttps && rejectIfNotHttps(req, res)) {
+      return;
     }
 
     const config = service.getResourceConfig(resourceId);
@@ -146,9 +161,23 @@ export function x402Middleware(options: X402MiddlewareOptions) {
  * Returns an Express handler for the unlock endpoint: POST body { txHash, resourceId }.
  * Verifies payment and returns { token, expiresIn } or { error }.
  */
-export function createUnlockRoute(rateLimitKey?: (req: Request) => string) {
+export function createUnlockRoute(
+  rateLimitKeyOrOptions?: ((req: Request) => string) | CreateUnlockRouteOptions,
+  legacyOptions?: CreateUnlockRouteOptions
+) {
+  const options: CreateUnlockRouteOptions =
+    typeof rateLimitKeyOrOptions === 'function'
+      ? { rateLimitKey: rateLimitKeyOrOptions, ...legacyOptions }
+      : rateLimitKeyOrOptions ?? {};
+  const rateLimitKey = options.rateLimitKey;
+  const enforceHttps = resolveEnforceHttps(options.enforceHttps);
+
   return function unlockHandler(req: Request, res: Response, next: NextFunction): void {
     const run = async (): Promise<void> => {
+      if (enforceHttps && rejectIfNotHttps(req, res)) {
+        return;
+      }
+
       const service = getUnlockService();
       if (!service) {
         res.status(500).json({ error: 'x402 not initialized' });

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import type { IRouter } from 'express';
-import { initializeX402, x402Middleware, getUnlockService } from '@x402/unlocker';
+import { initializeX402, x402Middleware, getUnlockService, rejectIfNotHttps, resolveEnforceHttps } from '@x402/unlocker';
 import { config } from './config';
 
 const PREMIUM_ARTICLE = {
@@ -39,7 +39,7 @@ export function registerRoutes(app: IRouter): void {
     minConfirmations: config.minConfirmations,
     jwtSecret: config.jwtSecret,
     storagePath: '.x402-demo',
-    merchantSigPrivateKey: config.merchantSigPrivateKey || undefined,
+    merchantSigPrivateKey: config.merchantSigPrivateKey,
   });
 
   app.get('/public/article', (_req: Request, res: Response) => {
@@ -69,6 +69,9 @@ export function registerRoutes(app: IRouter): void {
 
   app.post('/unlock', async (req: Request, res: Response, next: (err?: unknown) => void) => {
     try {
+      if (resolveEnforceHttps() && rejectIfNotHttps(req, res)) {
+        return;
+      }
       const service = getUnlockService();
       if (!service) {
         res.status(500).json({ error: 'x402 not initialized' });
@@ -92,10 +95,13 @@ export function registerRoutes(app: IRouter): void {
       const key = req.ip || (req.socket?.remoteAddress as string) || 'unknown';
       const result = await service.verifyAndUnlock(txHash, resourceId, key);
       if (result.success) {
-        const logs = service.getUsageLogger().getLogs();
-        const last = logs[logs.length - 1];
-        if (last) {
-          logPayment(last.txHash, last.userAddress, last.resourceId, last.paymentAmount);
+        if (result.usage) {
+          logPayment(
+            result.usage.txHash,
+            result.usage.userAddress,
+            result.usage.resourceId,
+            result.usage.paymentAmount
+          );
         }
         res.json({ token: result.token, expiresIn: result.expiresIn });
       } else {

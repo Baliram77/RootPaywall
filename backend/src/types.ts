@@ -30,6 +30,11 @@ export interface X402Config {
   merchantSigPrivateKey?: string;
   /** Signature TTL in seconds (default 300). */
   merchantSigTtlSeconds?: number;
+  /**
+   * Require MERCHANT_SIG_PRIVATE_KEY at startup (default: true).
+   * Set false only for local demos that intentionally ship unsigned 402 challenges.
+   */
+  requireMerchantSig?: boolean;
 }
 
 /** Payment verification result */

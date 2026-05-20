@@ -9,7 +9,7 @@ import { PaymentVerifier } from './PaymentVerifier';
 import { AccessController } from './AccessController';
 import { UsageLogger } from './UsageLogger';
 import { FileRevocationStore } from './RevocationStore';
-import type { ResourceConfig, X402Config } from './types';
+import type { ResourceConfig, UsageLogEntry, X402Config } from './types';
 
 /** Simple in-memory fixed-window rate limiter with TTL cleanup. */
 function createRateLimiter(maxPerWindow: number, windowMs: number) {
@@ -50,6 +50,8 @@ export interface UnlockResult {
   success: true;
   token: string;
   expiresIn: number;
+  /** Usage log entry written for this unlock (avoids re-reading the full log file). */
+  usage?: UsageLogEntry;
 }
 
 export interface UnlockError {
@@ -94,6 +96,20 @@ export class UnlockService {
       options.rateLimitWindowMs ?? 60_000
     );
     this.resourceConfigs = new Map();
+    const requireMerchantSig = options.requireMerchantSig ?? true;
+    if (requireMerchantSig && !options.merchantSigPrivateKey) {
+      throw new Error(
+        'merchantSigPrivateKey is required when requireMerchantSig is true (default). ' +
+          'Set MERCHANT_SIG_PRIVATE_KEY or pass requireMerchantSig: false for local demo only.'
+      );
+    }
+    if (!options.merchantSigPrivateKey) {
+      console.warn(
+        '[x402] MERCHANT_SIG_PRIVATE_KEY is not set. 402 challenges will be UNSIGNED.\n' +
+          '  This disables MITM protection on the payment-required handshake.\n' +
+          '  Set MERCHANT_SIG_PRIVATE_KEY in production deployments.'
+      );
+    }
     this.merchantSigWallet = options.merchantSigPrivateKey
       ? new Wallet(options.merchantSigPrivateKey)
       : null;
@@ -200,13 +216,14 @@ export class UnlockService {
 
     this.logger.markTxUsed(txHash);
     this.logger.releaseTxHash(txHash);
-    this.logger.log({
+    const usageEntry: UsageLogEntry = {
       txHash,
       userAddress: result.sender ?? '',
       resourceId,
       paymentAmount: result.amount ?? config.price,
       timestamp: new Date().toISOString(),
-    });
+    };
+    this.logger.log(usageEntry);
 
     const duration = config.accessDurationSeconds;
     const token = this.access.generateAccessToken(
@@ -219,6 +236,7 @@ export class UnlockService {
       success: true,
       token,
       expiresIn: duration,
+      usage: usageEntry,
     };
   }
 

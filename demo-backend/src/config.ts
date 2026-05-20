@@ -54,3 +54,9 @@ if (!config.jwtSecret) {
 if (!Number.isFinite(config.minConfirmations) || config.minConfirmations < 1) {
   throw new Error('MIN_CONFIRMATIONS must be a positive integer (recommended: 6).');
 }
+
+if (!config.merchantSigPrivateKey) {
+  throw new Error(
+    'MERCHANT_SIG_PRIVATE_KEY is required. Set it in demo-backend/.env to sign 402 payment details (MITM protection).'
+  );
+}

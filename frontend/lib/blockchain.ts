@@ -66,7 +66,10 @@ export async function sendPayment(to: string, valueWei: bigint): Promise<string>
       setTimeout(() => reject(new Error('Transaction confirmation timeout (60s)')), 60_000)
     ),
   ]);
-  return receipt!.hash;
+  if (!receipt?.hash) {
+    throw new Error('Transaction receipt missing after confirmation');
+  }
+  return receipt.hash;
 }
 
 declare global {

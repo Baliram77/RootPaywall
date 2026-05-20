@@ -18,6 +18,7 @@ describe('UnlockService', () => {
       storagePath: testStorage,
       rateLimitMax: 2,
       rateLimitWindowMs: 10000,
+      requireMerchantSig: false,
     });
   });
 

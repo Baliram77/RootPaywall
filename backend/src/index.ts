@@ -12,7 +12,8 @@ import { UnlockService } from './unlockService';
 import { setUnlockService } from './x402Middleware';
 import { DEFAULT_ROOTSTOCK_TESTNET_RPC } from './types';
 
-export { x402Middleware, createUnlockRoute, setUnlockService, getUnlockService } from './x402Middleware';
+export { x402Middleware, createUnlockRoute, setUnlockService, getUnlockService, resolveEnforceHttps, rejectIfNotHttps } from './x402Middleware';
+export type { CreateUnlockRouteOptions } from './x402Middleware';
 export { PaymentVerifier } from './PaymentVerifier';
 export { AccessController } from './AccessController';
 export { UsageLogger } from './UsageLogger';
@@ -43,6 +44,8 @@ export interface InitializeX402Options {
   /** Optional: sign 402 payment details to prevent MITM swapping. */
   merchantSigPrivateKey?: string;
   merchantSigTtlSeconds?: number;
+  /** Require merchant signing key at startup (default: true). */
+  requireMerchantSig?: boolean;
 }
 
 /**
@@ -62,6 +65,7 @@ export function initializeX402(options: InitializeX402Options): UnlockService {
     rateLimitWindowMs: options.rateLimitWindowMs,
     merchantSigPrivateKey: options.merchantSigPrivateKey,
     merchantSigTtlSeconds: options.merchantSigTtlSeconds,
+    requireMerchantSig: options.requireMerchantSig,
   });
   setUnlockService(service);
   return service;

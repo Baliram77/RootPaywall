@@ -20,6 +20,7 @@ describe('x402 middleware and unlock', () => {
       requiredAmount: '0.0001',
       minConfirmations: 1,
       jwtSecret,
+      requireMerchantSig: false,
     });
   });
 
@@ -45,6 +46,22 @@ describe('x402 middleware and unlock', () => {
     const res = await request(app).post('/unlock').send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('Missing');
+  });
+
+  it('unlock route should reject HTTP when HTTPS enforced', async () => {
+    const prev = process.env.X402_ENFORCE_HTTPS;
+    process.env.X402_ENFORCE_HTTPS = 'true';
+    try {
+      app.post('/unlock', createUnlockRoute());
+      const res = await request(app)
+        .post('/unlock')
+        .send({ txHash: '0x' + 'a'.repeat(64), resourceId: 'premium-api' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('HTTPS is required');
+    } finally {
+      if (prev === undefined) delete process.env.X402_ENFORCE_HTTPS;
+      else process.env.X402_ENFORCE_HTTPS = prev;
+    }
   });
 
   it('getUnlockService should return service after init', () => {

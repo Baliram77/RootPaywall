@@ -34,8 +34,10 @@ Then set:
 | `JWT_SECRET` | yes | Secret used to sign access tokens |
 | `MIN_CONFIRMATIONS` | no | Confirmations required before unlock (default: `6`; for demo you can use `1`) |
 | `FRONTEND_URL` | no | Allowed frontend origin for CORS (default: `http://localhost:3001`) |
-| `MERCHANT_SIG_PRIVATE_KEY` | no | If set, demo-backend will sign 402 payment details (recommended) |
+| `MERCHANT_SIG_PRIVATE_KEY` | yes | Private key to sign 402 payment details (MITM protection). Must match `NEXT_PUBLIC_MERCHANT_SIG_SIGNER` in the frontend |
 | `PORT` | no | Server port (default: `3000`) |
+
+**Security notes:** The demo server uses `helmet` (HSTS) and enforces HTTPS in production via `X-Forwarded-Proto`. Set `FRONTEND_URL` for CORS allowlisting.
 
 If `MERCHANT_ADDRESS` is missing or still the placeholder, the server will exit on startup with an error.
 
