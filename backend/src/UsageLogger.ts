@@ -1,15 +1,14 @@
 /**
- * @x402/unlocker - Usage and double-spend tracking (JSON file storage)
+ * @x402/unlocker - Usage and double-spend tracking (JSON file storage + claim store)
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createClaimStore, type ClaimStore } from './ClaimStore';
 import type { UsageLogEntry } from './types';
 
 const DEFAULT_STORAGE_DIR = '.x402';
 const USAGE_LOG_FILE = 'usage.json';
-const USED_TX_FILE = 'used-tx.json';
-const CLAIMS_DIR = 'claims';
 
 function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) {
@@ -26,83 +25,70 @@ function readJson<T>(filePath: string, defaultValue: T): T {
   }
 }
 
-function writeJson(filePath: string, data: unknown): void {
+function atomicWriteJson(filePath: string, data: unknown): void {
   ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  const tmp = `${filePath}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
+  fs.renameSync(tmp, filePath);
 }
 
 export interface UsageLoggerOptions {
   storagePath?: string;
+  claimTtlMs?: number;
+  redisUrl?: string;
 }
 
 export class UsageLogger {
   private usagePath: string;
-  private usedTxPath: string;
-  private claimsDir: string;
+  private claims: ClaimStore;
 
   constructor(options: UsageLoggerOptions = {}) {
     const base = options.storagePath
       ? path.resolve(options.storagePath)
       : path.join(process.cwd(), DEFAULT_STORAGE_DIR);
+    ensureDir(base);
     this.usagePath = path.join(base, USAGE_LOG_FILE);
-    this.usedTxPath = path.join(base, USED_TX_FILE);
-    this.claimsDir = path.join(base, CLAIMS_DIR);
+    this.claims = createClaimStore({
+      storagePath: base,
+      claimTtlMs: options.claimTtlMs,
+      redisUrl: options.redisUrl,
+    });
   }
 
   /** Log a usage event (payment + resource access). */
   log(entry: UsageLogEntry): void {
     const logs = readJson<UsageLogEntry[]>(this.usagePath, []);
     logs.push(entry);
-    writeJson(this.usagePath, logs);
+    atomicWriteJson(this.usagePath, logs);
   }
 
   /** Record a tx hash as used to prevent double spending. */
-  markTxUsed(txHash: string): void {
-    const set = readJson<Record<string, true>>(this.usedTxPath, {});
-    set[txHash.toLowerCase()] = true;
-    writeJson(this.usedTxPath, set);
+  async markTxUsed(txHash: string): Promise<void> {
+    await this.claims.markTxUsed(txHash);
   }
 
   /**
    * Atomically claim a tx hash to prevent concurrent verification (TOCTOU).
-   * Uses an exclusive lock file per tx hash, which is safe across processes.
-   *
-   * Returns true if claimed, false if already claimed/used.
+   * File store: persists claiming state in shared used-tx.json (multi-instance on shared volume).
+   * Redis store: cluster-wide SET NX when X402_REDIS_URL is set.
    */
-  claimTxHash(txHash: string): boolean {
-    const normalized = txHash.toLowerCase();
-    if (this.isTxUsed(normalized)) return false;
-    ensureDir(this.claimsDir);
-    const lockPath = path.join(this.claimsDir, `${normalized}.lock`);
-    try {
-      const fd = fs.openSync(lockPath, 'wx');
-      fs.closeSync(fd);
-      return true;
-    } catch {
-      return false;
-    }
+  async claimTxHash(txHash: string): Promise<boolean> {
+    return this.claims.claimTxHash(txHash);
   }
 
   /** Release a previously claimed tx hash (best-effort). */
-  releaseTxHash(txHash: string): void {
-    const normalized = txHash.toLowerCase();
-    const lockPath = path.join(this.claimsDir, `${normalized}.lock`);
-    try {
-      if (fs.existsSync(lockPath)) fs.unlinkSync(lockPath);
-    } catch {
-      // ignore
-    }
+  async releaseTxHash(txHash: string): Promise<void> {
+    await this.claims.releaseTxHash(txHash);
   }
 
-  /** Check if a tx hash was already used. */
-  isTxUsed(txHash: string): boolean {
-    const set = readJson<Record<string, true>>(this.usedTxPath, {});
-    return !!set[txHash.toLowerCase()];
+  /** Check if a tx hash was already used or actively claimed. */
+  async isTxUsed(txHash: string): Promise<boolean> {
+    return this.claims.isTxUsed(txHash);
   }
 
-  /** Async version for PaymentVerifier. */
+  /** Alias for PaymentVerifier integration. */
   async isTxUsedAsync(txHash: string): Promise<boolean> {
-    return Promise.resolve(this.isTxUsed(txHash));
+    return this.isTxUsed(txHash);
   }
 
   /** Get all usage logs (for admin/debug). */

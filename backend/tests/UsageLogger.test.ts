@@ -20,7 +20,7 @@ describe('UsageLogger', () => {
     }
   });
 
-  it('should log and mark tx used', () => {
+  it('should log and mark tx used', async () => {
     logger.log({
       txHash: '0xabc',
       userAddress: '0xuser',
@@ -28,9 +28,9 @@ describe('UsageLogger', () => {
       paymentAmount: '0.0001',
       timestamp: new Date().toISOString(),
     });
-    logger.markTxUsed('0xabc');
-    expect(logger.isTxUsed('0xabc')).toBe(true);
-    expect(logger.isTxUsed('0xdef')).toBe(false);
+    await logger.markTxUsed('0xabc');
+    expect(await logger.isTxUsed('0xabc')).toBe(true);
+    expect(await logger.isTxUsed('0xdef')).toBe(false);
   });
 
   it('should return logs', () => {
@@ -49,16 +49,25 @@ describe('UsageLogger', () => {
   it('claimTxHash returns true for exactly one concurrent caller', async () => {
     const txHash = '0x' + 'a'.repeat(64);
     const results = await Promise.all(
-      Array.from({ length: 20 }, () => Promise.resolve(logger.claimTxHash(txHash)))
+      Array.from({ length: 20 }, () => logger.claimTxHash(txHash))
     );
     expect(results.filter(Boolean)).toHaveLength(1);
-    logger.releaseTxHash(txHash);
+    await logger.releaseTxHash(txHash);
   });
 
-  it('claimTxHash rejects second claim on same txHash', () => {
+  it('claimTxHash rejects second claim on same txHash', async () => {
     const txHash = '0x' + 'b'.repeat(64);
-    expect(logger.claimTxHash(txHash)).toBe(true);
-    expect(logger.claimTxHash(txHash)).toBe(false);
-    logger.releaseTxHash(txHash);
+    expect(await logger.claimTxHash(txHash)).toBe(true);
+    expect(await logger.claimTxHash(txHash)).toBe(false);
+    await logger.releaseTxHash(txHash);
+  });
+
+  it('allows reclaim after stale claim TTL expires', async () => {
+    logger = new UsageLogger({ storagePath: testDir, claimTtlMs: 80 });
+    const txHash = '0x' + 'c'.repeat(64);
+    expect(await logger.claimTxHash(txHash)).toBe(true);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(await logger.claimTxHash(txHash)).toBe(true);
+    await logger.releaseTxHash(txHash);
   });
 });

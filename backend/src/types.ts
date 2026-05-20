@@ -23,6 +23,10 @@ export interface X402Config {
   chainId?: number;
   /** Optional: custom storage path for usage logs and used tx hashes */
   storagePath?: string;
+  /** Stale in-flight claim TTL in ms (default 10 minutes). */
+  claimTtlMs?: number;
+  /** Redis URL for cluster-wide tx claims (env: X402_REDIS_URL). */
+  redisUrl?: string;
   /**
    * Optional: private key used to sign 402 payment details (prevents MITM address swapping).
    * If set, middleware will include signature fields in the 402 response.

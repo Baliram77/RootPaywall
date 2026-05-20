@@ -63,18 +63,11 @@ export default function PaymentModal({
     const sig = paymentRequired.addressSig;
     const expiresAt = paymentRequired.addressSigExpiresAt;
     const chainId = paymentRequired.chainId ?? 31;
-    const isProduction = process.env.NODE_ENV === 'production';
 
     if (!expectedSigner) {
-      if (isProduction) {
-        throw new Error(
-          'NEXT_PUBLIC_MERCHANT_SIG_SIGNER is not configured. Refusing to pay (merchant signature verification required in production).'
-        );
-      }
-      console.warn(
-        '[x402] NEXT_PUBLIC_MERCHANT_SIG_SIGNER is not set; skipping merchant signature verification (dev only).'
+      throw new Error(
+        'NEXT_PUBLIC_MERCHANT_SIG_SIGNER is not configured. Refusing to pay (merchant signature verification required).'
       );
-      return;
     }
     if (!sig || !expiresAt) {
       throw new Error('Unsigned payment details. Refusing to pay (missing merchant signature).');

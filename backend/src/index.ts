@@ -12,7 +12,7 @@ import { UnlockService } from './unlockService';
 import { setUnlockService } from './x402Middleware';
 import { DEFAULT_ROOTSTOCK_TESTNET_RPC } from './types';
 
-export { x402Middleware, createUnlockRoute, setUnlockService, getUnlockService, resolveEnforceHttps, rejectIfNotHttps } from './x402Middleware';
+export { x402Middleware, createUnlockRoute, setUnlockService, getUnlockService, resolveEnforceHttps, rejectIfNotHttps, configureExpressTrustProxy, readBearerToken } from './x402Middleware';
 export type { CreateUnlockRouteOptions } from './x402Middleware';
 export { PaymentVerifier } from './PaymentVerifier';
 export { AccessController } from './AccessController';
@@ -41,6 +41,8 @@ export interface InitializeX402Options {
   storagePath?: string;
   rateLimitMax?: number;
   rateLimitWindowMs?: number;
+  claimTtlMs?: number;
+  redisUrl?: string;
   /** Optional: sign 402 payment details to prevent MITM swapping. */
   merchantSigPrivateKey?: string;
   merchantSigTtlSeconds?: number;
@@ -63,6 +65,8 @@ export function initializeX402(options: InitializeX402Options): UnlockService {
     storagePath: options.storagePath,
     rateLimitMax: options.rateLimitMax,
     rateLimitWindowMs: options.rateLimitWindowMs,
+    claimTtlMs: options.claimTtlMs,
+    redisUrl: options.redisUrl,
     merchantSigPrivateKey: options.merchantSigPrivateKey,
     merchantSigTtlSeconds: options.merchantSigTtlSeconds,
     requireMerchantSig: options.requireMerchantSig,

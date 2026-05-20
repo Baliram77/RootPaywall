@@ -23,15 +23,37 @@ export function resolveEnforceHttps(override?: boolean): boolean {
   return override ?? (process.env.NODE_ENV === 'production' || process.env.X402_ENFORCE_HTTPS === 'true');
 }
 
+/**
+ * Configure Express trust proxy for correct HTTPS detection behind reverse proxies.
+ * Honors X402_TRUST_PROXY=true|false; defaults to enabled in production.
+ */
+export function configureExpressTrustProxy(app: { set: (key: string, value: unknown) => unknown }): void {
+  const explicit = process.env.X402_TRUST_PROXY;
+  if (explicit === 'false') return;
+  if (process.env.NODE_ENV === 'production' || explicit === 'true') {
+    app.set('trust proxy', 1);
+  }
+}
+
 /** Returns true if the request was rejected (not HTTPS). */
 export function rejectIfNotHttps(req: Request, res: Response): boolean {
-  const xfProto = (req.headers['x-forwarded-proto'] as string | undefined) ?? '';
-  const isHttps = req.secure || xfProto.toLowerCase().includes('https');
+  const trustProxy = Boolean(req.app?.get?.('trust proxy'));
+  const xfProtoRaw = trustProxy ? ((req.headers['x-forwarded-proto'] as string | undefined) ?? '') : '';
+  const xfProto = xfProtoRaw.split(',')[0]?.trim().toLowerCase() ?? '';
+  const isHttps = req.secure || (trustProxy && xfProto === 'https');
   if (!isHttps) {
     res.status(400).json({ error: 'HTTPS is required' });
     return true;
   }
   return false;
+}
+
+/** Read bearer token from Authorization header only (no query/body leakage). */
+export function readBearerToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7).trim();
+  return token || null;
 }
 
 export interface CreateUnlockRouteOptions {
@@ -81,10 +103,7 @@ export function x402Middleware(options: X402MiddlewareOptions) {
       return;
     }
 
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ')
-      ? authHeader.slice(7)
-      : (req.query?.token as string) ?? (req.body?.token as string);
+    const token = readBearerToken(req);
 
     if (!token) {
       const sig = service.createPaymentRequiredSignature({

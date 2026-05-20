@@ -44,6 +44,8 @@ export interface UnlockServiceOptions extends X402Config {
   rateLimitMax?: number;
   /** Rate limit window in ms. Default 60000 (1 min). */
   rateLimitWindowMs?: number;
+  claimTtlMs?: number;
+  redisUrl?: string;
 }
 
 export interface UnlockResult {
@@ -81,7 +83,11 @@ export class UnlockService {
     this.chainId = options.chainId ?? 31;
     this.defaultConfirmations = options.minConfirmations;
     this.defaultAccessDuration = 3600;
-    this.logger = new UsageLogger({ storagePath: options.storagePath });
+    this.logger = new UsageLogger({
+      storagePath: options.storagePath,
+      claimTtlMs: options.claimTtlMs,
+      redisUrl: options.redisUrl,
+    });
     // Persist token revocations to the same storage base as usage logs (if configured).
     const base = options.storagePath
       ? path.resolve(options.storagePath)
@@ -188,7 +194,7 @@ export class UnlockService {
     }
 
     // Atomically claim txHash before verification to prevent races.
-    const claimed = this.logger.claimTxHash(txHash);
+    const claimed = await this.logger.claimTxHash(txHash);
     if (!claimed) {
       return { success: false, error: 'Transaction already used' };
     }
@@ -198,7 +204,7 @@ export class UnlockService {
       recipientAddress: config.recipientAddress,
       requiredAmountWei: amountWei,
       minConfirmations: this.defaultConfirmations,
-      isTxHashUsed: (tx) => this.logger.isTxUsedAsync(tx),
+      isTxHashUsed: (tx) => this.logger.isTxUsed(tx),
       chainId: this.chainId,
     });
 
@@ -206,7 +212,7 @@ export class UnlockService {
 
     if (!result.valid) {
       // Release claim so user can retry after confirmations/indexing.
-      this.logger.releaseTxHash(txHash);
+      await this.logger.releaseTxHash(txHash);
       return {
         success: false,
         code: result.errorCode ?? 'PAYMENT_VERIFICATION_FAILED',
@@ -214,8 +220,8 @@ export class UnlockService {
       };
     }
 
-    this.logger.markTxUsed(txHash);
-    this.logger.releaseTxHash(txHash);
+    await this.logger.markTxUsed(txHash);
+    await this.logger.releaseTxHash(txHash);
     const usageEntry: UsageLogEntry = {
       txHash,
       userAddress: result.sender ?? '',

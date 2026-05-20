@@ -1,10 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { configureExpressTrustProxy, rejectIfNotHttps, resolveEnforceHttps } from '@x402/unlocker';
 import { registerRoutes } from './routes';
 import { config } from './config';
 
 const app = express();
+
+configureExpressTrustProxy(app);
 
 app.use(
   helmet({
@@ -12,13 +15,9 @@ app.use(
   })
 );
 
-if (process.env.NODE_ENV === 'production') {
+if (resolveEnforceHttps()) {
   app.use((req, res, next) => {
-    const proto = req.header('x-forwarded-proto');
-    if (proto !== 'https' && !req.secure) {
-      res.status(403).json({ error: 'HTTPS required' });
-      return;
-    }
+    if (rejectIfNotHttps(req, res)) return;
     next();
   });
 }
@@ -45,7 +44,9 @@ app.get('/health', (_req, res) => {
 });
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Error:', err);
+  if (process.env.DEBUG) {
+    console.error('Error:', err);
+  }
   res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' });
 });
 
